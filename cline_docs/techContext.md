@@ -1,17 +1,20 @@
 # Tech Context
 
 ## Technologies used
-- Python
-- asyncio
-- aiohttp
-- prompt-toolkit (for interactive terminal UI)
-- rich (for styled terminal output)
-- PyYAML (for YAML configuration file parsing)
+-   **Python:** The core programming language.
+-   **PocketFlow:** The framework used for building the agentic AI workflow engine. This dictates the use of Nodes and Flows for structuring agent logic.
+-   **`asyncio`:** For asynchronous programming, enabling efficient I/O-bound operations and responsive agents.
+-   **`aiohttp`:** (Likely used for asynchronous HTTP requests by tools or core components, though not explicitly stated as a primary framework component).
+-   **`prompt-toolkit`:** For creating the interactive terminal user interface.
+-   **`rich`:** For styling and formatting output in the terminal.
+-   **`PyYAML`:** For parsing YAML configuration files (e.g., `pocket_commander.conf.yaml`).
 
 ## Development setup
-- Poetry for dependency management
-- VSCode as IDE
+-   **Poetry:** For dependency management and packaging.
+-   **VSCode:** As the recommended Integrated Development Environment (IDE).
 
 ## Technical constraints
-- Must be asynchronous
-- Tools should be self-contained
+-   **Asynchronous by Design:** The system must leverage `asyncio` for all potentially blocking operations to maintain responsiveness, a key requirement for agentic systems.
+-   **PocketFlow Adherence:** Development should follow the patterns and principles of the PocketFlow framework (Nodes, Flows).
+-   **Modular and Self-Contained Tools:** Tools integrated into the system should be designed as independent, reusable modules.
+-   **Extensibility:** The architecture must support easy addition of new tools, flows, and agent capabilities.
