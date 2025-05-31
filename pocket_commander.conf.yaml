@@ -22,3 +22,15 @@ terminal_modes:
     flow_module: pocket_commander.modes.composer
     llm_profile: anthro
     description: "Mode for composing complex prompts or documents."
+  tool-agent: # New mode configuration
+    flow_module: pocket_commander.modes.tool_agent
+    llm_profile: default # Using the default LLM profile
+    description: "Interactive tool-enabled agent for complex tasks."
+    # The 'roleDefinition', 'whenToUse', 'groups', 'customInstructions', and 'config' 
+    # from the .roomodes example are not standard here.
+    # The mode's Python class __init__ receives this 'tool-agent' block as 'mode_config'.
+    # So, if 'initial_context' or other specific settings are needed, they can be added here directly.
+    initial_context: "You are a helpful and resourceful AI assistant." 
+    # Tool groups would typically be managed by the agent's LLM prompt or internal logic,
+    # or a more advanced system might load them from a dedicated section if needed.
+    # For now, the mode's Python code will implicitly define tool access via ToolEnabledLLMNode.
