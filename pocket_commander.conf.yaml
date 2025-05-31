@@ -1,0 +1,24 @@
+llm-profiles:
+  dev:
+    inherits: default
+    api_key_name: DEV_OPENAI_API_KEY
+  anthro:
+    provider: anthropic
+    api_key_name: ANTHROPIC_API_KEY
+    model: claude-v1
+    api_base: https://api.anthropic.com/v1
+  gemini:
+    provider: gemini
+    api_key_name: GEMINI_API_KEY
+    model: gemini-2.5-flash-preview-05-20
+  default:
+    inherits: gemini
+terminal_modes:
+  main:
+    flow_module: pocket_commander.modes.main
+    llm_profile: dev
+    description: "Default interaction mode."
+  composer:
+    flow_module: pocket_commander.modes.composer
+    llm_profile: anthro
+    description: "Mode for composing complex prompts or documents."

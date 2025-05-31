@@ -1,0 +1,5 @@
+geopy
+yfinance
+requests
+pytz
+timezonefinder

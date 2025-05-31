@@ -1,0 +1,28 @@
+[project]
+name = "pocket_commander"
+version = "0.1.0"
+description = "Pocket OpenSCAD project"
+authors = [
+    {name = "Kilo Code", email = "kc@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+]
+
+[tool.poetry]
+# name, version, description, authors, readme are defined in [project]
+packages = [{include = "pocket_commander"}]
+
+[tool.poetry.dependencies]
+python = ">=3.12"
+
+rich = "*"
+prompt-toolkit = "*"
+PyYAML = "*"
+[tool.poetry.scripts]
+main = "pocket_commander.main:main"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
