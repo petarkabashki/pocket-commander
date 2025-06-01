@@ -41,6 +41,7 @@ async def create_application_core(
         "active_mode_on_exit": None,  # OnEnterExitHook
         "available_modes": initial_app_services['raw_app_config'].get('modes', {}),
     }
+    initial_app_services['_application_state_DO_NOT_USE_DIRECTLY'] = application_state
 
     output_handler = initial_app_services['output_handler']
     prompt_func = initial_app_services['prompt_func']
@@ -118,6 +119,7 @@ async def create_application_core(
         application_state["active_mode_on_exit"] = on_exit
         
         logger.info(f"Switched to mode: {mode_name}")
+        logger.debug(f"APP_CORE: application_state['active_mode_name'] set to: {application_state['active_mode_name']}")
         
         # Call new mode's on_enter hook if it exists
         if application_state["active_mode_on_enter"]:

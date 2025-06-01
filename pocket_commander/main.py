@@ -9,7 +9,7 @@ load_dotenv()
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO, # Consider making this configurable
+    level=logging.DEBUG, # Consider making this configurable
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('pocket_commander.log', mode='w'), # Overwrite log each run
@@ -75,7 +75,7 @@ async def main():
     # create_application_core will use the provided app_services (with handlers)
     # and might inject its internal state into app_services_dict if the HACK for TIF prompt is used.
     try:
-        top_level_input_processor = await create_application_core(app_services_typed)
+        top_level_input_processor = await create_application_core(app_services_dict)
         # If app_core needs to inject its state for TIF's prompt:
         # It should have done so by modifying the 'app_services_dict' (or 'app_services_typed')
         # it received, e.g., app_services_typed['_application_state_DO_NOT_USE_DIRECTLY'] = internal_app_state_dict

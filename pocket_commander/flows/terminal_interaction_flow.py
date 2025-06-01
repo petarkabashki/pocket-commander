@@ -133,6 +133,7 @@ class TerminalInteractionFlow:
                 # Dynamically determine prompt based on app_services (indirectly from app_state)
                 # This is a simplification. A cleaner way would be for app_core to provide this.
                 current_mode_name = "N/A" # Default
+                logger.debug(f"TIF: Attempting to get _application_state_DO_NOT_USE_DIRECTLY from app_services. Value: {self.app_services.get('_application_state_DO_NOT_USE_DIRECTLY')}")
                 if self.app_services.get('_application_state_DO_NOT_USE_DIRECTLY'): # HACK
                     current_mode_name = self.app_services['_application_state_DO_NOT_USE_DIRECTLY'].get('active_mode_name', "N/A")
                 
