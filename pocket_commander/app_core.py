@@ -10,6 +10,7 @@ from pocket_commander.commands.io import AbstractCommandInput # AbstractOutputHa
 from pocket_commander.commands.core import CommandContext
 from pocket_commander.commands.parser import parse_arguments, ArgumentParsingError
 from pocket_commander.types import AppServices
+from pocket_commander.commands.builtin_commands import get_builtin_commands
 
 # Mode-specific logic components structure (imported for type hinting from a mode_logic file)
 # from pocket_commander.modes.main.main_mode_logic import ModeInputHandlerFunc, ModeLogicComponents
@@ -177,7 +178,9 @@ async def create_application_core(
         await _switch_to_mode(target_mode)
 
     # --- Define Global Commands ---
+
     global_command_definitions: List[CommandDefinition] = [
+        *get_builtin_commands(),  # Add built-in commands
         CommandDefinition(name="exit", command_function=_cmd_global_exit, description="Exits Pocket Commander.", aliases=["quit", "q"], category="Global"),
         CommandDefinition(name="help", command_function=_cmd_global_help, description="Shows this help message for global commands.", aliases=["?"], category="Global"),
         CommandDefinition(name="modes", command_function=_cmd_global_modes, description="Lists available modes.", category="Global"),

@@ -48,7 +48,7 @@ class AppStateAwareCompleter(Completer):
         
         # Global commands (conventionally prefixed with /)
         # We'd ideally get these from application_state['global_commands'] via app_services
-        completions.extend(["/exit", "/quit", "/q", "/help", "/modes", "/mode"])
+        completions.extend(["/exit", "/quit", "/q", "/help", "/modes", "/mode", "/tools", "/tool"])
 
         # Mode names for /mode command
         available_modes = raw_config.get('modes', {})
@@ -133,7 +133,7 @@ class TerminalInteractionFlow:
                 # Dynamically determine prompt based on app_services (indirectly from app_state)
                 # This is a simplification. A cleaner way would be for app_core to provide this.
                 current_mode_name = "N/A" # Default
-                logger.debug(f"TIF: Attempting to get _application_state_DO_NOT_USE_DIRECTLY from app_services. Value: {self.app_services.get('_application_state_DO_NOT_USE_DIRECTLY')}")
+                # logger.debug(f"TIF: Attempting to get _application_state_DO_NOT_USE_DIRECTLY from app_services. Value: {self.app_services.get('_application_state_DO_NOT_USE_DIRECTLY')}")
                 if self.app_services.get('_application_state_DO_NOT_USE_DIRECTLY'): # HACK
                     current_mode_name = self.app_services['_application_state_DO_NOT_USE_DIRECTLY'].get('active_mode_name', "N/A")
                 

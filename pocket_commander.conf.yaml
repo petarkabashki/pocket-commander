@@ -17,6 +17,17 @@ llm-profiles:
 # Application core settings
 application:
   default_mode: main # Specifies the mode to load on startup
+  # ... other app settings
+
+logging:
+  level: INFO  # Default global log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  file_path: "pocket_commander.log" # Path to the log file
+  file_mode: "a" # Log file mode ('w' for overwrite, 'a' for append)
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  # Optionally, add per-module level overrides here in the future:
+  # levels:
+  #   pocket_commander.app_core: DEBUG
+  #   some_other_module: WARNING
 
 modes: # Renamed from 'modes' in app_core.py's application_state for clarity
   main:
@@ -24,7 +35,7 @@ modes: # Renamed from 'modes' in app_core.py's application_state for clarity
     module: pocket_commander.modes.main # Path to the package/module exporting the composition function
     # composition_function: create_main_mode_logic # Optional: app_core infers this
     description: "Default interaction mode."
-    llm_profile: dev 
+    llm_profile: dev
     # Mode-specific configuration, accessible in the mode's composition function
     default_greet_name: "Valued User from Config"
 
@@ -35,7 +46,7 @@ modes: # Renamed from 'modes' in app_core.py's application_state for clarity
     description: "Mode for composing complex prompts or documents."
     llm_profile: anthro
     # Example specific config for composer mode
-    style_guide: "formal" 
+    style_guide: "formal"
 
   tool-agent:
     name: tool-agent
@@ -45,3 +56,37 @@ modes: # Renamed from 'modes' in app_core.py's application_state for clarity
     llm_profile: default
     initial_context: "You are a helpful and resourceful AI assistant, ready to use tools."
     # Other tool-agent specific configs can go here
+
+mcp_tools:
+  - server_name: "brave-search"
+    tool_name: "brave_web_search"
+    description: "Performs a web search using the Brave Search API. Ideal for general queries, news, articles, and online content. Supports pagination."
+    parameters:
+      - name: "query"
+        description: "Search query (max 400 chars, 50 words)"
+        type: "string"
+        required: true
+      - name: "count"
+        description: "Number of results (1-20, default 10)"
+        type: "integer"
+        required: false
+        default: 10
+      - name: "offset"
+        description: "Pagination offset (max 9, default 0)"
+        type: "integer"
+        required: false
+        default: 0
+  # Example of another tool for future reference
+  # - server_name: "another-mcp-server"
+  #   tool_name: "example_tool"
+  #   description: "Does something interesting."
+  #   parameters:
+  #     - name: "input_param"
+  #       description: "An input parameter."
+  #       type: "boolean"
+  #       required: true
+  #     - name: "optional_param"
+  #       description: "An optional parameter."
+  #       type: "string"
+  #       required: false
+  #       default: "hello"

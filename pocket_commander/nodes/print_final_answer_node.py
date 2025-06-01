@@ -32,12 +32,14 @@ class PrintFinalAnswerNode(AsyncNode):
         final_answer_to_process = prep_res["final_answer"]
         
         if self.prints_directly and self.output_handler: # Changed self.terminal_app to self.output_handler
-            self.output_handler.send_message(f"Agent: {final_answer_to_process}", style="bold green") # Changed to use output_handler.print_text
+            await self.output_handler.send_message(f"Agent: {final_answer_to_process}", style="bold green") # Changed to use output_handler.print_text
             logger.info(f"Printed final answer directly via output_handler: {final_answer_to_process}")
         else:
             # If not printing directly, the mode is responsible for displaying shared_data['final_answer'].
             # This node confirms the answer is processed.
             logger.info(f"Final answer prepared for mode display: {final_answer_to_process}")
+            
+        # await self.output_handler.send_message(final_answer_to_process, style="bold green") # Changed to use output_handler.send_message
 
         return {"processed_answer": final_answer_to_process, "messages": prep_res["messages"]}
 

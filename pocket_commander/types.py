@@ -21,4 +21,7 @@ class AppServices(TypedDict):
     output_handler: AbstractOutputHandler
     prompt_func: PromptFunc
     raw_app_config: Dict[str, Any]
+    current_log_level: str # NEW: Stores current global log level (e.g., "INFO")
+    # Optional: If the hack for TIF prompt state is still in use
+    _application_state_DO_NOT_USE_DIRECTLY: Optional[Dict[str, Any]]
     # logger: Optional[logging.Logger] # Uncomment and configure if a shared logger is added
