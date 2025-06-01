@@ -1,33 +1,45 @@
 # Progress
 
 ## What works
--   **Core Agentic Workflow Engine Foundation:**
-    -   Basic structure for PocketFlow `Nodes` and `Flows` is in place ([`pocket_commander/nodes/`](pocket_commander/nodes/:1), [`pocket_commander/flows/`](pocket_commander/flows/:1)).
-    -   Logic for LLM calls with tool support, including dynamic tool execution, exists within [`pocket_commander/nodes/tool_enabled_llm_node.py`](pocket_commander/nodes/tool_enabled_llm_node.py:1) (though parts may be refactored to utils).
-    -   Example tools like `get_weather`, `get_stock_price`, and `search_web` are defined in [`pocket_commander/tools/`](pocket_commander/tools/:1), demonstrating the tool integration mechanism.
--   **Interactive Terminal Interface:**
-    -   A functional terminal interface ([`pocket_commander/terminal_interface.py`](pocket_commander/terminal_interface.py:1)) using `prompt-toolkit` and `rich` allows for interaction with the engine.
-    -   Supports built-in commands for navigation and control (`/help`, `/commands`, `/modes`, `/mode <name>`, `/exit`).
-    -   Modes, representing different agent configurations or master flows, are configurable in [`pocket_commander.conf.yaml`](pocket_commander.conf.yaml:1) and loaded dynamically from [`pocket_commander/modes/`](pocket_commander/modes/:1).
-    -   Mode switching is operational.
-    -   Initial `main` and `composer` modes exist as placeholders for more complex agent implementations.
--   **Documentation:**
-    -   `README.md` and `cline_docs/` have been updated to reflect the project's nature as an extendable agentic AI workflow engine based on PocketFlow.
+-   **Core Functional Architecture (Plan v8.3 Implemented):**
+    -   **Core Data Structures & I/O:** `AbstractCommandInput`, `AbstractOutputHandler`, `PromptFunc`, `CommandDefinition`, `ParameterDefinition`, `CommandContext`, `AppServices` are defined.
+    -   **Argument Parser:** A sophisticated argument parser (`pocket_commander/commands/parser.py`) is implemented.
+    -   **Mode Composition (`main` mode):** The `main` mode has been refactored to a functional composition pattern (`pocket_commander/modes/main/main_mode_logic.py`), returning a mode handler and command definitions.
+    -   **Application Core (`app_core.py`):** `create_application_core` function manages application state (via closure), global commands, dynamic mode switching (imports and calls mode composition functions), and returns a `top_level_app_input_handler`.
+    -   **Terminal Interaction Flow (`terminal_interaction_flow.py`):** Refactored to use the `top_level_app_input_handler` from `app_core`, provides concrete I/O handlers (`TerminalOutputHandler`, `request_dedicated_input` for `PromptFunc`).
+    -   **Main Entry Point (`main.py`):** Updated to initialize and connect `app_core` and `terminal_interaction_flow`.
+    -   **Configuration (`pocket_commander.conf.yaml`):** Updated to support the new mode structure (e.g., `module` and `composition_function` keys).
+-   **Pre-Plan v8.3 Foundations:**
+    -   Basic structure for PocketFlow `Nodes` and `Flows` ([`pocket_commander/nodes/`](pocket_commander/nodes/:1), `pocket_commander/flows/` - though `app_flow.py` removed).
+    -   LLM call logic in [`pocket_commander/nodes/tool_enabled_llm_node.py`](pocket_commander/nodes/tool_enabled_llm_node.py:1).
+    -   Example tools in [`pocket_commander/tools/`](pocket_commander/tools/:1).
 
 ## What's left to build
--   **Enhance Core Engine & Developer Experience:**
-    -   Refactor utility functions from [`pocket_commander/nodes/tool_enabled_llm_node.py`](pocket_commander/nodes/tool_enabled_llm_node.py:1) to a dedicated module in [`pocket_commander/utils/`](pocket_commander/utils/:1) (e.g., `agent_utils.py` or `pocketflow_helpers.py`) to improve modularity for those building custom agents.
-    -   Solidify and document conventions for creating new Nodes, Flows, and Tools to make it easier for users to extend the engine.
--   **Develop Example Agents/Flows:**
-    -   Implement more sophisticated PocketFlow graphs within the existing `main` and `composer` modes (or new example modes) to showcase the engine's capabilities beyond simple echo/placeholder logic. These should demonstrate practical agentic workflows.
--   **Tooling & Integrations:**
-    -   Address the coroutine issue with the `get_stock_price` tool (as noted in `activeContext.md`) to ensure tool reliability.
-    -   Explore adding more diverse example tools.
--   **Testing & Robustness:**
-    -   Implement a testing strategy for nodes, flows, and tools.
+
+**Immediate Next Steps (Post Core Refactor):**
+-   **Refactor Remaining Modes:**
+    -   `composer` mode: Update to the new functional composition pattern.
+    -   `tool-agent` mode: Update to the new functional composition pattern.
+-   **Address `pocket_commander/commands/decorators.py`:** The `@command` decorator is currently unused by the new core architecture. Decide whether to remove it or refactor it as a helper for creating `CommandDefinition` objects.
+-   **Thorough Testing:** Test the new architecture extensively: global commands, mode switching, `main` mode commands, argument parsing, interactive prompts, error handling.
+-   **Resolve UI State Feedback for TIF:** Refine how `TerminalInteractionFlow` gets dynamic state (current mode, command lists for completions) from `app_core.py` to remove the `_application_state_DO_NOT_USE_DIRECTLY` hack. This might involve `app_core` providing explicit getter functions or updating `AppServices` with UI-specific state.
+
+**Phase 5: Documentation and Review (Plan v8.3)**
+    -   Update `cline_docs/systemPatterns.md` and `cline_docs/techContext.md` to reflect the new functional architecture.
+    -   Update `cline_docs/pocketflow-guides.md` if necessary.
+
+**General (Longer Term):**
+-   Refactor utility functions from [`pocket_commander/nodes/tool_enabled_llm_node.py`](pocket_commander/nodes/tool_enabled_llm_node.py:1) to [`pocket_commander/utils/`](pocket_commander/utils/:1).
+-   Solidify and document conventions for the new functional architecture for developers extending the system.
+-   Develop example agents/flows using the new v8.3 patterns in the refactored `composer` and `tool-agent` modes (or new example modes).
+-   Address the coroutine issue with the `get_stock_price` tool.
+-   Implement a comprehensive testing strategy for all components.
 
 ## Progress status
--   **COMPLETED:** Core terminal interface with mode support implemented.
--   **COMPLETED:** Initial documentation pass to define the project as an agentic workflow engine (README, cline_docs).
--   **IN PROGRESS:** Refining the core engine components and improving documentation for developers looking to build custom agentic solutions.
--   Next steps involve fleshing out example agentic flows, addressing the `get_stock_price` tool issue, and further enhancing the developer experience for extending the engine.
+-   **COMPLETED:** Architectural Plan v8.3 (Functional Composition).
+-   **COMPLETED:** Phase 1: Define Core Data Structures and I/O Abstractions.
+-   **COMPLETED:** Phase 2: Implement Mode Composition Logic (Argument parser; `main` mode refactored).
+-   **COMPLETED:** Phase 3: Implement Application Core Composition Logic (`app_core.py`).
+-   **COMPLETED:** Phase 4: Update Main Application Entry Point and I/O Flow (`main.py`, `terminal_interaction_flow.py`; `app_flow.py` removed).
+-   **IN PROGRESS:** Post-refactor cleanup and addressing implications (other modes, decorators).
+-   **NEXT:** Refactor `composer` and `tool-agent` modes. Then, comprehensive testing and documentation updates.

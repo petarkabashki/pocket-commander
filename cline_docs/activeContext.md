@@ -1,13 +1,26 @@
 # Active Context
 
 ## What you're working on now
-The current task is to update the project documentation, specifically the `README.md` and the `cline_docs/` files, to accurately reflect that Pocket Commander is an **extendable agentic AI workflow engine based on the PocketFlow framework**, and serves as a **basis for implementing custom agentic automation tools**.
+The primary task is the **implementation of Plan v8.3: Fully Functional Composition for Application Core and Modes**. This involves a significant architectural refactor to:
+- Define core I/O abstractions (`AbstractCommandInput`, `AbstractOutputHandler`, `PromptFunc`).
+- Implement `CommandDefinition` and `CommandContext` data structures.
+- Create an `AppServices` container.
+- Develop mode composition functions that return a mode-specific input handler and command definitions.
+- Build the `create_application_core` function to compose the main application logic, manage state via closures, and handle global commands and mode switching.
+- Update `TerminalInteractionFlow` to use the new `top_level_app_input_handler` returned by `create_application_core`.
+- Refactor `main.py` to initialize and connect these components.
 
 ## Recent changes
-- Updated `README.md` to reflect the new project positioning.
-- Updated `cline_docs/productContext.md` to align with the new project positioning.
+- **Architectural Planning Completed:** Plan v8.3, detailing a fully functional composition model, was finalized and documented in `docs/plan_v8.1_functional_mode_composition.md`.
+- **Mode Switch:** Switched from "Architect" mode to "Code" mode to begin implementation.
+- **Memory Bank Initialization:** All Memory Bank files (`productContext.md`, `activeContext.md`, `systemPatterns.md`, `techContext.md`, `progress.md`) were read to establish full context.
 
 ## Next steps
-- Review and update `cline_docs/systemPatterns.md` and `cline_docs/techContext.md` if necessary to ensure they align with the refined project description (emphasizing PocketFlow and agentic engine aspects).
-- Confirm all `cline_docs/` are consistent with the project's nature as an agentic workflow engine.
-- Once all documentation updates are complete, mark this task as finished.
+1.  **Update `cline_docs/progress.md`** to reflect the commencement of Plan v8.3 implementation.
+2.  **Begin Phase 1 of Plan v8.3 Implementation:** Define Core Data Structures and I/O Abstractions.
+    *   `AbstractCommandInput`, `AbstractOutputHandler`, `PromptFunc` in `pocket_commander/commands/io.py`.
+    *   `ParameterDefinition`, `CommandDefinition` in `pocket_commander/commands/definition.py`.
+    *   `CommandContext` in `pocket_commander/commands/core.py`.
+    *   `AppServices` in `pocket_commander/types.py`.
+3.  Proceed through subsequent phases of Plan v8.3 implementation as documented.
+4.  After implementation, update `cline_docs/systemPatterns.md` and `cline_docs/techContext.md` to reflect the new architecture.

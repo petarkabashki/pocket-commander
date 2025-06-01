@@ -5,32 +5,43 @@ llm-profiles:
   anthro:
     provider: anthropic
     api_key_name: ANTHROPIC_API_KEY
-    model: claude-v1
+    model: claude-v1 # Ensure this model is still valid/desired
     api_base: https://api.anthropic.com/v1
   gemini:
     provider: gemini
     api_key_name: GEMINI_API_KEY
-    model: gemini-2.5-flash-preview-05-20
+    model: gemini-1.5-flash-latest # Updated to a common model name
   default:
-    inherits: gemini
-terminal_modes:
+    inherits: gemini # Default LLM profile uses Gemini
+
+# Application core settings
+application:
+  default_mode: main # Specifies the mode to load on startup
+
+modes: # Renamed from 'modes' in app_core.py's application_state for clarity
   main:
-    flow_module: pocket_commander.modes.main
-    llm_profile: dev
+    name: main # Explicit name, matches the key
+    module: pocket_commander.modes.main # Path to the package/module exporting the composition function
+    # composition_function: create_main_mode_logic # Optional: app_core infers this
     description: "Default interaction mode."
+    llm_profile: dev 
+    # Mode-specific configuration, accessible in the mode's composition function
+    default_greet_name: "Valued User from Config"
+
   composer:
-    flow_module: pocket_commander.modes.composer
-    llm_profile: anthro
+    name: composer
+    module: pocket_commander.modes.composer # TODO: Refactor this mode
+    # composition_function: create_composer_mode_logic # TODO: Implement
     description: "Mode for composing complex prompts or documents."
-  tool-agent: # New mode configuration
-    flow_module: pocket_commander.modes.tool_agent
-    llm_profile: default # Using the default LLM profile
+    llm_profile: anthro
+    # Example specific config for composer mode
+    style_guide: "formal" 
+
+  tool-agent:
+    name: tool-agent
+    module: pocket_commander.modes.tool_agent # TODO: Refactor this mode
+    # composition_function: create_tool_agent_mode_logic # TODO: Implement
     description: "Interactive tool-enabled agent for complex tasks."
-    # The 'roleDefinition', 'whenToUse', 'groups', 'customInstructions', and 'config' 
-    # from the .roomodes example are not standard here.
-    # The mode's Python class __init__ receives this 'tool-agent' block as 'mode_config'.
-    # So, if 'initial_context' or other specific settings are needed, they can be added here directly.
-    initial_context: "You are a helpful and resourceful AI assistant." 
-    # Tool groups would typically be managed by the agent's LLM prompt or internal logic,
-    # or a more advanced system might load them from a dedicated section if needed.
-    # For now, the mode's Python code will implicitly define tool access via ToolEnabledLLMNode.
+    llm_profile: default
+    initial_context: "You are a helpful and resourceful AI assistant, ready to use tools."
+    # Other tool-agent specific configs can go here

@@ -1,17 +1,18 @@
 import logging
 import sys # Retained for now, though direct sys.stdout usage will be conditional
-from ..pocketflow import AsyncNode 
+from ..pocketflow import AsyncNode
+from ..commands.io import AbstractOutputHandler # Added import
 
 logger = logging.getLogger(__name__)
 
 class PrintFinalAnswerNode(AsyncNode):
-    def __init__(self, terminal_app_instance=None, prints_directly=False, max_retries=1, wait=0): # Added params
+    def __init__(self, output_handler: AbstractOutputHandler = None, prints_directly=False, max_retries=1, wait=0): # Changed terminal_app_instance to output_handler
         super().__init__(max_retries=max_retries, wait=wait)
-        self.terminal_app = terminal_app_instance
+        self.output_handler = output_handler # Stored output_handler
         self.prints_directly = prints_directly
         logger.debug(
             f"PrintFinalAnswerNode initialized with max_retries={self.max_retries}, "
-            f"wait={self.wait}s, prints_directly={self.prints_directly}"
+            f"wait={self.wait}s, prints_directly={self.prints_directly}, has_output_handler={self.output_handler is not None}"
         )
 
     async def prep_async(self, shared_data: dict):
@@ -25,18 +26,17 @@ class PrintFinalAnswerNode(AsyncNode):
 
     async def exec_async(self, prep_res: dict):
         """
-        Processes the final answer. If configured, prints directly via terminal_app.
+        Processes the final answer. If configured, prints directly via output_handler.
         Otherwise, ensures the answer is ready for the mode to display.
         """
         final_answer_to_process = prep_res["final_answer"]
         
-        if self.prints_directly and self.terminal_app:
-            self.terminal_app.display_output(f"Agent: {final_answer_to_process}", style="bold green")
-            logger.info(f"Printed final answer directly via terminal_app: {final_answer_to_process}")
+        if self.prints_directly and self.output_handler: # Changed self.terminal_app to self.output_handler
+            self.output_handler.send_message(f"Agent: {final_answer_to_process}", style="bold green") # Changed to use output_handler.print_text
+            logger.info(f"Printed final answer directly via output_handler: {final_answer_to_process}")
         else:
             # If not printing directly, the mode is responsible for displaying shared_data['final_answer'].
             # This node confirms the answer is processed.
-            # The original sys.stdout.write is removed in favor of terminal_app or mode handling.
             logger.info(f"Final answer prepared for mode display: {final_answer_to_process}")
 
         return {"processed_answer": final_answer_to_process, "messages": prep_res["messages"]}
@@ -51,7 +51,7 @@ class PrintFinalAnswerNode(AsyncNode):
         
         # Add a system message indicating the answer was processed by this node
         system_message_content = f"Final answer '{exec_res.get('processed_answer', 'N/A')}' processed by PrintFinalAnswerNode."
-        if self.prints_directly and self.terminal_app:
+        if self.prints_directly and self.output_handler: # Changed self.terminal_app to self.output_handler
             system_message_content += " (Displayed directly to terminal)"
         else:
             system_message_content += " (Prepared for mode display)"
