@@ -6,7 +6,7 @@ from pocket_commander.nodes.tool_enabled_llm_node import ToolEnabledLLMNode
 from pocket_commander.nodes.print_final_answer_node import PrintFinalAnswerNode
 
 # Define the create_tool_enabled_flow function (adapted from the original tool_flow.py)
-def create_tool_enabled_flow(shared_data_template, terminal_app_instance=None):
+def create_tool_enabled_flow(terminal_app_instance=None):
     initial_query = InitialQueryNode()
     llm_agent = ToolEnabledLLMNode(max_retries=2, wait=1)
     # Pass terminal_app_instance for direct printing by PrintFinalAnswerNode
@@ -19,7 +19,7 @@ def create_tool_enabled_flow(shared_data_template, terminal_app_instance=None):
     llm_agent - "error" >> final_answer_printer # Fallback for errors
 
     # The AsyncFlow now takes the shared_data_template
-    return AsyncFlow(start=initial_query, shared_data_template=shared_data_template)
+    return AsyncFlow(start=initial_query)
 
 
 class ToolAgentMode:
@@ -38,7 +38,7 @@ class ToolAgentMode:
         }
         
         # Create the PocketFlow instance for this mode
-        self.agent_pocket_flow = create_tool_enabled_flow(self.shared_data_template, self.terminal_app)
+        self.agent_pocket_flow = create_tool_enabled_flow(self.terminal_app)
 
         self.terminal_app.display_output(
             f"Tool Agent Mode initialized. Description: {self.mode_config.get('description', 'Interactive tool-enabled agent.')}",
