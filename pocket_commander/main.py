@@ -74,6 +74,8 @@ async def main():
     output_handler_instance = TerminalOutputHandler(terminal_flow.console, app_services_typed.event_bus)
     app_services_typed.output_handler = output_handler_instance
     app_services_typed.prompt_func = terminal_flow.request_dedicated_input
+    logger.info("About to call output_handler_instance.initialize()")
+    await output_handler_instance.initialize() # Initialize to subscribe to events
     
     try:
         # create_application_core will now receive app_services_typed

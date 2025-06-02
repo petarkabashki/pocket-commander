@@ -30,31 +30,46 @@ class MainDefaultAgent(AsyncNode): # Or just "Agent" if that's the convention
         self._is_active = False # Track activation state
         
         logger.info(f"MainDefaultAgent '{self.slug}' initialized with args: {init_args}")
-        # Subscriptions should happen upon activation to avoid premature event handling
-        # or if the agent is created but not immediately activated.
+        
+        # Subscribe to events immediately upon initialization
+        # This ensures the agent is ready to receive lifecycle events like "activating"
+        # even if they are published very early in the app startup.
+        if self.event_bus:
+            asyncio.create_task(self._subscribe_to_events())
+            logger.info(f"MainDefaultAgent '{self.slug}': Event subscription task created in __init__.")
+        else:
+            logger.error(f"MainDefaultAgent '{self.slug}': Event bus not available in __init__ for creating subscription task.")
+
 
     async def _subscribe_to_events(self):
         """Subscribes to necessary events. Called upon activation."""
-        if self.event_bus:
+        # This check is now more of a safeguard, as __init__ also checks.
+        if self.event_bus: 
             await self.event_bus.subscribe(AppInputEvent, self.handle_app_input) # type: ignore
             await self.event_bus.subscribe(AgentLifecycleEvent, self.handle_lifecycle_event) # type: ignore
-            logger.info(f"MainDefaultAgent '{self.slug}' subscribed to AppInputEvent and AgentLifecycleEvent.")
+            logger.info(f"MainDefaultAgent '{self.slug}' successfully subscribed to AppInputEvent and AgentLifecycleEvent.")
         else:
-            logger.error(f"MainDefaultAgent '{self.slug}': Event bus not available for subscriptions.")
+            # This path should ideally not be hit if __init__ check passes.
+            logger.error(f"MainDefaultAgent '{self.slug}': Event bus not available in _subscribe_to_events.")
 
 
     async def handle_lifecycle_event(self, event: AgentLifecycleEvent):
+        logger.debug(f"MainDefaultAgent '{self.slug}' received AgentLifecycleEvent: {event.lifecycle_type} for agent '{event.agent_name}'")
         if event.agent_name == self.slug:
             if event.lifecycle_type == "activating" and not self._is_active:
+                logger.info(f"MainDefaultAgent '{self.slug}': 'activating' event received, calling on_agent_activate.")
                 await self.on_agent_activate()
             elif event.lifecycle_type == "deactivating" and self._is_active:
+                logger.info(f"MainDefaultAgent '{self.slug}': 'deactivating' event received, calling on_agent_deactivate.")
                 await self.on_agent_deactivate()
 
     async def on_agent_activate(self):
         """Logic to run when this agent becomes active."""
-        await self._subscribe_to_events() 
+        # Subscription is now handled in __init__
+        # await self._subscribe_to_events() 
         self._is_active = True
         logger.info(f"MainDefaultAgent '{self.slug}' activated.")
+        logger.info(f"MainDefaultAgent '{self.slug}': Attempting to publish welcome message.")
         await self.event_bus.publish(
             AgentOutputEvent(
                 message="Welcome Valued User from Main Agent! Type '/help' for commands.",
@@ -75,6 +90,7 @@ class MainDefaultAgent(AsyncNode): # Or just "Agent" if that's the convention
     async def handle_app_input(self, event: AppInputEvent):
         """Handles raw input directed to this agent."""
         if not self._is_active: # Only process if active
+            logger.debug(f"MainDefaultAgent '{self.slug}' received AppInputEvent but is not active. Ignoring.")
             return
 
         raw_text = event.raw_text.strip()

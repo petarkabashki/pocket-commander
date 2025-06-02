@@ -2,6 +2,7 @@
 # pocket_commander/commands/terminal_io.py
 import asyncio # Added
 import uuid # Added
+import logging # Added
 from typing import Any, Dict, Optional, Type, TypeVar, List
 from rich.console import Console
 
@@ -9,6 +10,8 @@ from pocket_commander.commands.io import AbstractCommandInput, AbstractOutputHan
 from pocket_commander.event_bus import AsyncEventBus, BaseEvent # Added
 from pocket_commander.events import SystemMessageEvent, SystemMessageType # Added
 from pocket_commander.events import AgentOutputEvent # Added
+
+logger = logging.getLogger(__name__) # Added
 
 T = TypeVar('T')
 
@@ -100,15 +103,20 @@ class TerminalOutputHandler(AbstractOutputHandler):
 
     async def initialize(self):
         """Subscribes to relevant events."""
+        logger.info("TerminalOutputHandler initializing and subscribing to events.") # Added log
         await self.event_bus.subscribe(AgentOutputEvent, self._handle_agent_output_event) # type: ignore
         await self.event_bus.subscribe(SystemMessageEvent, self._handle_system_message_event) # type: ignore
+        logger.info("TerminalOutputHandler subscriptions complete.") # Added log
+
 
     async def _handle_agent_output_event(self, event: AgentOutputEvent):
+        logger.info(f"TerminalOutputHandler received AgentOutputEvent: '{event.message[:50]}...' Style: {event.style}") # Modified log
         """Handles AgentOutputEvent by printing the message to the console."""
         # This method is now the primary way agents send output to the terminal.
         await self.send_message(event.message, style=event.style)
 
     async def _handle_system_message_event(self, event: SystemMessageEvent):
+        logger.info(f"TerminalOutputHandler received SystemMessageEvent: Type: {event.message_type}, Msg: '{event.message[:50]}...'") # Added log
         """Handles SystemMessageEvent by formatting and printing the message."""
         from rich.text import Text # Local import
 
