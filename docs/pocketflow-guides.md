@@ -1,11 +1,11 @@
 ---
 layout: default
-title: "Agentic Coding"
+title: "Agentic Coding & Pocket Commander Agents"
 ---
 
 # Agentic Coding: Humans Design, Agents code!
 
-> If you are an AI agents involved in building LLM Systems, read this guide **VERY, VERY** carefully! This is the most important chapter in the entire document. Throughout development, you should always (1) start with a small and simple solution, (2) design at a high level (`docs/design.md`) before implementation, and (3) frequently ask humans for feedback and clarification.
+> If you are an AI agents involved in building LLM Systems, read this guide **VERY, VERY** carefully! This is the most important chapter in the entire document. Throughout development, you should always (1) start with a small and simple solution, (2. Design at a high level (`docs/design.md`) before implementation, and (3) frequently ask humans for feedback and clarification.
 {: .warning }
 
 ## Agentic Coding Steps
@@ -22,118 +22,118 @@ Agentic Coding should be a collaboration between Human System Design and Agent I
 | 6. Optimization        | ★★☆ Medium | ★★☆ Medium | Humans evaluate the results, and the AI helps optimize. |
 | 7. Reliability         | ★☆☆ Low   | ★★★ High  |  The AI writes test cases and addresses corner cases.     |
 
-1. **Requirements**: Clarify the requirements for your project, and evaluate whether an AI system is a good fit. 
-    - Understand AI systems' strengths and limitations:
-      - **Good for**: Routine tasks requiring common sense (filling forms, replying to emails)
-      - **Good for**: Creative tasks with well-defined inputs (building slides, writing SQL)
-      - **Not good for**: Ambiguous problems requiring complex decision-making (business strategy, startup planning)
-    - **Keep It User-Centric:** Explain the "problem" from the user's perspective rather than just listing features.
-    - **Balance complexity vs. impact**: Aim to deliver the highest value features with minimal complexity early.
+1.  **Requirements**: Clarify the requirements for your project, and evaluate whether an AI system is a good fit.
+    *   Understand AI systems' strengths and limitations:
+        *   **Good for**: Routine tasks requiring common sense (filling forms, replying to emails)
+        *   **Good for**: Creative tasks with well-defined inputs (building slides, writing SQL)
+        *   **Not good for**: Ambiguous problems requiring complex decision-making (business strategy, startup planning)
+    *   **Keep It User-Centric:** Explain the "problem" from the user's perspective rather than just listing features.
+    *   **Balance complexity vs. impact**: Aim to deliver the highest value features with minimal complexity early.
 
-2. **Flow Design**: Outline at a high level, describe how your AI system orchestrates nodes.
-    - Identify applicable design patterns (e.g., [Map Reduce](./design_pattern/mapreduce.md), [Agent](./design_pattern/agent.md), [RAG](./design_pattern/rag.md)).
-      - For each node in the flow, start with a high-level one-line description of what it does.
-      - If using **Map Reduce**, specify how to map (what to split) and how to reduce (how to combine).
-      - If using **Agent**, specify what are the inputs (context) and what are the possible actions.
-      - If using **RAG**, specify what to embed, noting that there's usually both offline (indexing) and online (retrieval) workflows.
-    - Outline the flow and draw it in a mermaid diagram. For example:
-      ```mermaid
-      flowchart LR
-          start[Start] --> batch[Batch]
-          batch --> check[Check]
-          check -->|OK| process
-          check -->|Error| fix[Fix]
-          fix --> check
-          
-          subgraph process[Process]
-            step1[Step 1] --> step2[Step 2]
-          end
-          
-          process --> endNode[End]
-      ```
-    - > **If Humans can't specify the flow, AI Agents can't automate it!** Before building an LLM system, thoroughly understand the problem and potential solution by manually solving example inputs to develop intuition.  
-      {: .best-practice }
+2.  **Flow Design**: Outline at a high level, describe how your AI system orchestrates nodes.
+    *   Identify applicable design patterns (e.g., [Map Reduce](./design_pattern/mapreduce.md), [Agent](./design_pattern/agent.md), [RAG](./design_pattern/rag.md)).
+        *   For each node in the flow, start with a high-level one-line description of what it does.
+        *   If using **Map Reduce**, specify how to map (what to split) and how to reduce (how to combine).
+        *   If using **Agent**, specify what are the inputs (context) and what are the possible actions.
+        *   If using **RAG**, specify what to embed, noting that there's usually both offline (indexing) and online (retrieval) workflows.
+    *   Outline the flow and draw it in a mermaid diagram. For example:
+        ```mermaid
+        flowchart LR
+            start[Start] --> batch[Batch]
+            batch --> check[Check]
+            check -->|OK| process
+            check -->|Error| fix[Fix]
+            fix --> check
+            
+            subgraph process[Process]
+              step1[Step 1] --> step2[Step 2]
+            end
+            
+            process --> endNode[End]
+        ```
+    *   > **If Humans can't specify the flow, AI Agents can't automate it!** Before building an LLM system, thoroughly understand the problem and potential solution by manually solving example inputs to develop intuition.
+        {: .best-practice }
 
-3. **Utilities**: Based on the Flow Design, identify and implement necessary utility functions.
-    - Think of your AI system as the brain. It needs a body—these *external utility functions*—to interact with the real world:
+3.  **Utilities**: Based on the Flow Design, identify and implement necessary utility functions.
+    *   Think of your AI system as the brain. It needs a body—these *external utility functions*—to interact with the real world:
         <div align="center"><img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/utility.png?raw=true" width="400"/></div>
 
-        - Reading inputs (e.g., retrieving Slack messages, reading emails)
-        - Writing outputs (e.g., generating reports, sending emails)
-        - Using external tools (e.g., calling LLMs, searching the web)
-        - **NOTE**: *LLM-based tasks* (e.g., summarizing text, analyzing sentiment) are **NOT** utility functions; rather, they are *core functions* internal in the AI system.
-    - For each utility function, implement it and write a simple test.
-    - Document their input/output, as well as why they are necessary. For example:
-      - `name`: `get_embedding` (`utils/get_embedding.py`)
-      - `input`: `str`
-      - `output`: a vector of 3072 floats
-      - `necessity`: Used by the second node to embed text
-    - Example utility implementation:
-      ```python
-      # utils/call_llm.py
-      from openai import OpenAI
-
-      def call_llm(prompt):    
-          client = OpenAI(api_key="YOUR_API_KEY_HERE")
-          r = client.chat.completions.create(
-              model="gpt-4o",
-              messages=[{"role": "user", "content": prompt}]
-          )
-          return r.choices[0].message.content
-          
-      if __name__ == "__main__":
-          prompt = "What is the meaning of life?"
-          print(call_llm(prompt))
-      ```
-    - > **Sometimes, design Utilies before Flow:**  For example, for an LLM project to automate a legacy system, the bottleneck will likely be the available interface to that system. Start by designing the hardest utilities for interfacing, and then build the flow around them.
-      {: .best-practice }
-
-4. **Node Design**: Plan how each node will read and write data, and use utility functions.
-   - One core design principle for PocketFlow is to use a [shared store](./core_abstraction/communication.md), so start with a shared store design:
-      - For simple systems, use an in-memory dictionary.
-      - For more complex systems or when persistence is required, use a database.
-      - **Don't Repeat Yourself**: Use in-memory references or foreign keys.
-      - Example shared store design:
+        *   Reading inputs (e.g., retrieving Slack messages, reading emails)
+        *   Writing outputs (e.g., generating reports, sending emails)
+        *   Using external tools (e.g., calling LLMs, searching the web)
+        *   **NOTE**: *LLM-based tasks* (e.g., summarizing text, analyzing sentiment) are **NOT** utility functions; rather, they are *core functions* internal in the AI system.
+    *   For each utility function, implement it and write a simple test.
+    *   Document their input/output, as well as why they are necessary. For example:
+        *   `name`: `get_embedding` (`utils/get_embedding.py`)
+        *   `input`: `str`
+        *   `output`: a vector of 3072 floats
+        *   `necessity`: Used by the second node to embed text
+    *   Example utility implementation:
         ```python
-        shared = {
-            "user": {
-                "id": "user123",
-                "context": {                # Another nested dict
-                    "weather": {"temp": 72, "condition": "sunny"},
-                    "location": "San Francisco"
-                }
-            },
-            "results": {}                   # Empty dict to store outputs
-        }
+        # utils/call_llm.py
+        from openai import OpenAI
+
+        def call_llm(prompt):    
+            client = OpenAI(api_key="YOUR_API_KEY_HERE")
+            r = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return r.choices[0].message.content
+            
+        if __name__ == "__main__":
+            prompt = "What is the meaning of life?"
+            print(call_llm(prompt))
         ```
-   - For each [Node](./core_abstraction/node.md), describe its type, how it reads and writes data, and which utility function it uses. Keep it specific but high-level without codes. For example:
-     - `type`: Regular (or Batch, or Async)
-     - `prep`: Read "text" from the shared store
-     - `exec`: Call the embedding utility function
-     - `post`: Write "embedding" to the shared store
+    *   > **Sometimes, design Utilies before Flow:**  For example, for an LLM project to automate a legacy system, the bottleneck will likely be the available interface to that system. Start by designing the hardest utilities for interfacing, and then build the flow around them.
+        {: .best-practice }
 
-5. **Implementation**: Implement the initial nodes and flows based on the design.
-   - 🎉 If you've reached this step, humans have finished the design. Now *Agentic Coding* begins!
-   - **"Keep it simple, stupid!"** Avoid complex features and full-scale type checking.
-   - **FAIL FAST**! Avoid `try` logic so you can quickly identify any weak points in the system.
-   - Add logging throughout the code to facilitate debugging.
+4.  **Node Design**: Plan how each node will read and write data, and use utility functions.
+    *   One core design principle for PocketFlow is to use a [shared store](./core_abstraction/communication.md), so start with a shared store design:
+        *   For simple systems, use an in-memory dictionary.
+        *   For more complex systems or when persistence is required, use a database.
+        *   **Don't Repeat Yourself**: Use in-memory references or foreign keys.
+        *   Example shared store design:
+            ```python
+            shared = {
+                "user": {
+                    "id": "user123",
+                    "context": {                # Another nested dict
+                        "weather": {"temp": 72, "condition": "sunny"},
+                        "location": "San Francisco"
+                    }
+                },
+                "results": {}                   # Empty dict to store outputs
+            }
+            ```
+    *   For each [Node](./core_abstraction/node.md), describe its type, how it reads and writes data, and which utility function it uses. Keep it specific but high-level without codes. For example:
+        *   `type`: Regular (or Batch, or Async)
+        *   `prep`: Read "text" from the shared store
+        *   `exec`: Call the embedding utility function
+        *   `post`: Write "embedding" to the shared store
 
-7. **Optimization**:
-   - **Use Intuition**: For a quick initial evaluation, human intuition is often a good start.
-   - **Redesign Flow (Back to Step 3)**: Consider breaking down tasks further, introducing agentic decisions, or better managing input contexts.
-   - If your flow design is already solid, move on to micro-optimizations:
-     - **Prompt Engineering**: Use clear, specific instructions with examples to reduce ambiguity.
-     - **In-Context Learning**: Provide robust examples for tasks that are difficult to specify with instructions alone.
+5.  **Implementation**: Implement the initial nodes and flows based on the design.
+    *   🎉 If you've reached this step, humans have finished the design. Now *Agentic Coding* begins!
+    *   **"Keep it simple, stupid!"** Avoid complex features and full-scale type checking.
+    *   **FAIL FAST**! Avoid `try` logic so you can quickly identify any weak points in the system.
+    *   Add logging throughout the code to facilitate debugging.
 
-   - > **You'll likely iterate a lot!** Expect to repeat Steps 3–6 hundreds of times.
-     >
-     > <div align="center"><img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/success.png?raw=true" width="400"/></div>
-     {: .best-practice }
+6.  **Optimization**:
+    *   **Use Intuition**: For a quick initial evaluation, human intuition is often a good start.
+    *   **Redesign Flow (Back to Step 3)**: Consider breaking down tasks further, introducing agentic decisions, or better managing input contexts.
+    *   If your flow design is already solid, move on to micro-optimizations:
+        *   **Prompt Engineering**: Use clear, specific instructions with examples to reduce ambiguity.
+        *   **In-Context Learning**: Provide robust examples for tasks that are difficult to specify with instructions alone.
 
-8. **Reliability**  
-   - **Node Retries**: Add checks in the node `exec` to ensure outputs meet requirements, and consider increasing `max_retries` and `wait` times.
-   - **Logging and Visualization**: Maintain logs of all attempts and visualize node results for easier debugging.
-   - **Self-Evaluation**: Add a separate node (powered by an LLM) to review outputs when results are uncertain.
+    *   > **You'll likely iterate a lot!** Expect to repeat Steps 3–6 hundreds of times.
+        >
+        > <div align="center"><img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/success.png?raw=true" width="400"/></div>
+        {: .best-practice }
+
+7.  **Reliability**
+    *   **Node Retries**: Add checks in the node `exec` to ensure outputs meet requirements, and consider increasing `max_retries` and `wait` times.
+    *   **Logging and Visualization**: Maintain logs of all attempts and visualize node results for easier debugging.
+    *   **Self-Evaluation**: Add a separate node (powered by an LLM) to review outputs when results are uncertain.
 
 ## Example LLM Project File Structure
 
@@ -151,84 +151,274 @@ my_project/
     └── design.md
 ```
 
-- **`docs/design.md`**: Contains project documentation for each step above. This should be *high-level* and *no-code*.
-- **`utils/`**: Contains all utility functions.
-  - It's recommended to dedicate one Python file to each API call, for example `call_llm.py` or `search_web.py`.
-  - Each file should also include a `main()` function to try that API call
-- **`nodes.py`**: Contains all the node definitions.
-  ```python
-  # nodes.py
-  from pocketflow import Node
-  from utils.call_llm import call_llm
+*   **`docs/design.md`**: Contains project documentation for each step above. This should be *high-level* and *no-code*.
+*   **`utils/`**: Contains all utility functions.
+    *   It's recommended to dedicate one Python file to each API call, for example `call_llm.py` or `search_web.py`.
+    *   Each file should also include a `main()` function to try that API call
+*   **`nodes.py`**: Contains all the node definitions.
+    ```python
+    # nodes.py
+    from pocketflow import Node
+    from utils.call_llm import call_llm
 
-  class GetQuestionNode(Node):
-      def exec(self, _):
-          # Get question directly from user input
-          user_question = input("Enter your question: ")
-          return user_question
-      
-      def post(self, shared, prep_res, exec_res):
-          # Store the user's question
-          shared["question"] = exec_res
-          return "default"  # Go to the next node
+    class GetQuestionNode(Node):
+        def exec(self, _):
+            # Get question directly from user input
+            user_question = input("Enter your question: ")
+            return user_question
+        
+        def post(self, shared, prep_res, exec_res):
+            # Store the user's question
+            shared["question"] = exec_res
+            return "default"  # Go to the next node
 
-  class AnswerNode(Node):
-      def prep(self, shared):
-          # Read question from shared
-          return shared["question"]
-      
-      def exec(self, question):
-          # Call LLM to get the answer
-          return call_llm(question)
-      
-      def post(self, shared, prep_res, exec_res):
-          # Store the answer in shared
-          shared["answer"] = exec_res
-  ```
-- **`flow.py`**: Implements functions that create flows by importing node definitions and connecting them.
-  ```python
-  # flow.py
-  from pocketflow import Flow
-  from nodes import GetQuestionNode, AnswerNode
+    class AnswerNode(Node):
+        def prep(self, shared):
+            # Read question from shared
+            return shared["question"]
+        
+        def exec(self, question):
+            # Call LLM to get the answer
+            return call_llm(question)
+        
+        def post(self, shared, prep_res, exec_res):
+            # Store the answer in shared
+            shared["answer"] = exec_res
+    ```
+*   **`flow.py`**: Implements functions that create flows by importing node definitions and connecting them.
+    ```python
+    # flow.py
+    from pocketflow import Flow
+    from nodes import GetQuestionNode, AnswerNode
 
-  def create_qa_flow():
-      """Create and return a question-answering flow."""
-      # Create nodes
-      get_question_node = GetQuestionNode()
-      answer_node = AnswerNode()
-      
-      # Connect nodes in sequence
-      get_question_node >> answer_node
-      
-      # Create flow starting with input node
-      return Flow(start=get_question_node)
-  ```
-- **`main.py`**: Serves as the project's entry point.
-  ```python
-  # main.py
-  from flow import create_qa_flow
+    def create_qa_flow():
+        """Create and return a question-answering flow."""
+        # Create nodes
+        get_question_node = GetQuestionNode()
+        answer_node = AnswerNode()
+        
+        # Connect nodes in sequence
+        get_question_node >> answer_node
+        
+        # Create flow starting with input node
+        return Flow(start=get_question_node)
+    ```
+*   **`main.py`**: Serves as the project's entry point.
+    ```python
+    # main.py
+    from flow import create_qa_flow
 
-  # Example main function
-  # Please replace this with your own main function
-  def main():
-      shared = {
-          "question": None,  # Will be populated by GetQuestionNode from user input
-          "answer": None     # Will be populated by AnswerNode
-      }
+    # Example main function
+    # Please replace this with your own main function
+    def main():
+        shared = {
+            "question": None,  # Will be populated by GetQuestionNode from user input
+            "answer": None     # Will be populated by AnswerNode
+        }
 
-      # Create the flow and run it
-      qa_flow = create_qa_flow()
-      qa_flow.run(shared)
-      print(f"Question: {shared['question']}")
-      print(f"Answer: {shared['answer']}")
+        # Create the flow and run it
+        qa_flow = create_qa_flow()
+        qa_flow.run(shared)
+        print(f"Question: {shared['question']}")
+        print(f"Answer: {shared['answer']}")
 
-  if __name__ == "__main__":
-      main()
-  ```
+    if __name__ == "__main__":
+        main()
+    ```
 
-================================================
-File: docs/index.md
-================================================
+# Creating and Using Agents in Pocket Commander
+
+This section details the new agent architecture in Pocket Commander, how to create new agents, and how they interact with the system.
+
+## New Agent Architecture: Event-Driven PocketFlow Nodes/Flows
+
+Pocket Commander agents are now implemented as **PocketFlow `AsyncNode` or `Flow` instances**. They operate within an **event-driven architecture**, communicating with the application core and other components via an `AsyncEventBus`.
+
+Key components of this architecture:
+
+*   **`AsyncEventBus` ([`pocket_commander/event_bus.py`](pocket_commander/event_bus.py:1)):** A central message bus for publishing and subscribing to events.
+*   **Core Events ([`pocket_commander/events.py`](pocket_commander/events.py:1)):** Standardized Pydantic models for communication, such as:
+    *   `AppInputEvent`: Carries user input to agents.
+    *   `AgentOutputEvent`: Carries agent responses/actions back to the system.
+    *   `AgentLifecycleEvent`: Manages agent state (e.g., start, stop).
+*   **`AgentConfig` ([`pocket_commander/types.py`](pocket_commander/types.py:1)):** A Pydantic model defining the structure for agent configuration in YAML.
+*   **`AgentResolver` ([`pocket_commander/agent_resolver.py`](pocket_commander/agent_resolver.py:1)):** Discovers and loads agent code from the filesystem based on configuration.
+*   **YAML Configuration ([`pocket_commander.conf.yaml`](pocket_commander.conf.yaml:1)):** Defines available agents, their paths, and initialization arguments.
+
+## How to Define a New Agent
+
+Creating a new agent involves two main parts: writing the agent's Python code and configuring it in YAML.
+
+### 1. Creating the Python Module
+
+Agents are typically placed in modules within directories specified by `agent_discovery_folders` in [`pocket_commander.conf.yaml`](pocket_commander.conf.yaml:1) (e.g., `pocket_commander/core_agents/`).
+
+An agent can be:
+*   A class that inherits from `pocketflow.base.AsyncNode`.
+*   A "composition function" that returns an instance of `pocketflow.base.Flow` (or `AsyncFlow`).
+
+**Key Methods/Patterns for Agents:**
+
+*   **`__init__(self, app_services: AppServices, **init_args)` (for Node-based agents):**
+    *   The constructor typically receives an `AppServices` instance (which provides access to the `event_bus`, `llm_configs`, etc.) and any other `init_args` specified in the YAML configuration.
+    *   Subscribe to necessary events (e.g., `AppInputEvent`, `AgentLifecycleEvent`) in the `__init__` method.
+    *   Store `app_services` and other necessary configurations.
+*   **Composition Function `(app_services: AppServices, **init_args) -> Flow` (for Flow-based agents):**
+    *   Similar to the `__init__` for nodes, this function receives `app_services` and `init_args`.
+    *   It should construct and return a PocketFlow `Flow` (or `AsyncFlow`). The nodes within this flow will handle event subscriptions and publications.
+*   **Handling `AppInputEvent`:**
+    *   Agents typically subscribe to `AppInputEvent`. When an event is received, the agent processes the input (often involving LLM calls, tool usage, etc.).
+    *   The event handler method (e.g., an `async def on_app_input(self, event: AppInputEvent):`) will contain the core logic of the agent.
+*   **Handling `AgentLifecycleEvent`:**
+    *   Agents can subscribe to `AgentLifecycleEvent` to perform setup or cleanup tasks when they are started or stopped.
+*   **Publishing `AgentOutputEvent`:**
+    *   After processing input, agents publish an `AgentOutputEvent` containing their response, which the application core or UI can then handle.
+*   **Asynchronous Operations:** Agent logic should be asynchronous (`async/await`) to work with the `AsyncEventBus` and PocketFlow's `AsyncNode`/`AsyncFlow`.
+
+### 2. Configuring the Agent in `pocket_commander.conf.yaml`
+
+Agents are defined under the `agents` key in [`pocket_commander.conf.yaml`](pocket_commander.conf.yaml:1). Each agent entry requires:
+
+*   **`slug`**: A unique string identifier for the agent (e.g., "my_new_agent").
+*   **`path`**: The Python dot-separated module path to the agent's code (e.g., `pocket_commander.custom_agents.my_agent_module`).
+*   **`class_name`**: (For Node-based agents) The name of the agent class within the module.
+*   **`composition_function_name`**: (For Flow-based agents) The name of the function in the module that returns the agent's flow.
+    *   *Note: Provide either `class_name` or `composition_function_name`, but not both.*
+*   **`description`**: A human-readable description of what the agent does.
+*   **`init_args`**: A dictionary of arguments that will be passed to the agent's `__init__` method (for classes) or composition function.
+    *   Common `init_args` include:
+        *   `llm_profile`: Specifies which LLM configuration to use (defined elsewhere in the YAML).
+        *   `tool_names`: A list of tool slugs that this agent is permitted to use.
+        *   Any other custom parameters your agent needs.
+
+**Role of `agent_discovery_folders`:**
+The `agent_discovery_folders` key in [`pocket_commander.conf.yaml`](pocket_commander.conf.yaml:1) lists directories (relative to the project root) where the `AgentResolver` will look for agent modules.
+
+## How Agents Interact with the System
+
+1.  **Initialization:**
+    *   On application startup, `ConfigLoader` reads [`pocket_commander.conf.yaml`](pocket_commander.conf.yaml:1).
+    *   `AgentResolver` uses the `agent_discovery_folders` and agent definitions to find and load the Python code for each configured agent.
+    *   When an agent is activated (e.g., by user command), `AppCore` requests `AgentResolver` to instantiate it, passing `AppServices` and the `init_args` from the YAML.
+2.  **Event Subscription:**
+    *   During its initialization, the agent subscribes to relevant events on the `event_bus` (provided via `AppServices`). For example, it subscribes to `AppInputEvent` to receive user queries and `AgentLifecycleEvent` for start/stop signals.
+3.  **Receiving Input:**
+    *   When the user provides input, `AppCore` (or the terminal interaction flow) publishes an `AppInputEvent` to the `event_bus`.
+    *   The active agent, having subscribed to this event type, receives the event and its payload.
+4.  **Processing and Generating Output:**
+    *   The agent processes the input. This might involve:
+        *   Making calls to an LLM.
+        *   Requesting the use of tools (which itself might involve further event publishing/subscription cycles if tools are also event-driven or managed by a separate agent like `tool-agent`).
+        *   Executing its internal PocketFlow logic.
+    *   Once a result is ready, the agent publishes an `AgentOutputEvent` to the `event_bus`.
+5.  **Displaying Output:**
+    *   `AppCore` or the UI components (like `TerminalInteractionFlow`) subscribe to `AgentOutputEvent`.
+    *   Upon receiving an `AgentOutputEvent`, they display the agent's response to the user.
+
+## Example: A Simple Echo Agent
+
+This example demonstrates a basic agent that echoes back any input it receives.
+
+**1. Python Code (`pocket_commander/custom_agents/echo_agent.py`):**
+
+```python
+# pocket_commander/custom_agents/echo_agent.py
+from pocket_commander.types import AppServices, AgentConfig
+from pocket_commander.events import AppInputEvent, AgentOutputEvent, AgentLifecycleEvent
+from pocket_commander.pocketflow.base import AsyncNode # Or use Flow for more complex agents
+import asyncio
+
+class EchoAgent(AsyncNode):
+    def __init__(self, app_services: AppServices, slug: str, **kwargs):
+        super().__init__()
+        self.app_services = app_services
+        self.slug = slug
+        self.is_active = False
+        print(f"EchoAgent '{self.slug}' initialized.")
+
+        # Subscribe to events
+        self.app_services.event_bus.subscribe(AppInputEvent, self.handle_app_input)
+        self.app_services.event_bus.subscribe(AgentLifecycleEvent, self.handle_lifecycle)
+
+    async def handle_lifecycle(self, event: AgentLifecycleEvent):
+        if event.agent_slug == self.slug:
+            if event.event_type == "start":
+                self.is_active = True
+                print(f"EchoAgent '{self.slug}' started.")
+                await self.app_services.event_bus.publish(
+                    AgentOutputEvent(source_agent_slug=self.slug, content_type="text", payload="Echo agent ready!")
+                )
+            elif event.event_type == "stop":
+                self.is_active = False
+                print(f"EchoAgent '{self.slug}' stopped.")
+
+    async def handle_app_input(self, event: AppInputEvent):
+        if not self.is_active or event.target_agent_slug != self.slug:
+            return
+
+        print(f"EchoAgent '{self.slug}' received input: {event.payload}")
+        output_payload = f"Echo from {self.slug}: {event.payload}"
+        
+        await self.app_services.event_bus.publish(
+            AgentOutputEvent(
+                source_agent_slug=self.slug,
+                content_type="text", # Or other types like 'tool_call', 'tool_result'
+                payload=output_payload
+            )
+        )
+
+    # Implement PocketFlow AsyncNode methods if needed, or handle logic within event handlers
+    async def prep_async(self, shared_store):
+        # This node might not use the traditional flow execution if purely event-driven
+        # but you could integrate it. For this example, we keep it simple.
+        return None
+
+    async def exec_async(self, prep_result):
+        # Logic here could be triggered by an event, then this node run as part of a flow
+        return None
+
+    async def post_async(self, shared_store, prep_result, exec_result):
+        # Publish results or decide next action
+        return "default" # Or another action for flow control
+```
+
+**2. YAML Configuration (`pocket_commander.conf.yaml`):**
+
+First, ensure `custom_agents` is in your discovery paths:
+```yaml
+# pocket_commander.conf.yaml
+# ... other configurations ...
+
+agent_discovery_folders:
+  - pocket_commander/core_agents
+  - pocket_commander/custom_agents # Add this line
+
+# ... llm_profiles, tools etc. ...
+```
+
+Then, define the `echo-agent`:
+```yaml
+# pocket_commander.conf.yaml
+# ... other configurations ...
+
+agents:
+  # ... other agents like main, composer, tool-agent ...
+  
+  - slug: "echo-agent"
+    path: "pocket_commander.custom_agents.echo_agent"
+    class_name: "EchoAgent"
+    description: "A simple agent that echoes back input."
+    init_args: {} # No specific init_args needed for this simple agent beyond the default 'slug'
+                  # The 'slug' from the top level will be passed automatically by AgentResolver.
+```
+
+**To use this agent:**
+1.  Ensure the `pocket_commander/custom_agents/` directory exists and contains `echo_agent.py`.
+2.  Start Pocket Commander.
+3.  Switch to the echo agent using the appropriate command (e.g., `/agent echo-agent`).
+4.  Any text you type will be echoed back by the agent.
+
+This example provides a foundational understanding. Real-world agents will have more complex logic, potentially involving LLMs, tools, and more sophisticated PocketFlow structures.
 ---
 layout: default
 title: "Home"
@@ -239,9 +429,9 @@ nav_order: 1
 
 A [100-line](https://github.com/the-pocket/PocketFlow/blob/main/pocketflow/__init__.py) minimalist LLM framework for *Agents, Task Decomposition, RAG, etc*.
 
-- **Lightweight**: Just the core graph abstraction in 100 lines. ZERO dependencies, and vendor lock-in.
-- **Expressive**: Everything you love from larger frameworks—([Multi-](./design_pattern/multi_agent.html))[Agents](./design_pattern/agent.html), [Workflow](./design_pattern/workflow.html), [RAG](./design_pattern/rag.html), and more.  
-- **Agentic-Coding**: Intuitive enough for AI agents to help humans build complex LLM applications.
+*   **Lightweight**: Just the core graph abstraction in 100 lines. ZERO dependencies, and vendor lock-in.
+*   **Expressive**: Everything you love from larger frameworks—([Multi-](./design_pattern/multi_agent.html))[Agents](./design_pattern/agent.html), [Workflow](./design_pattern/workflow.html), [RAG](./design_pattern/rag.html), and more.
+*   **Agentic-Coding**: Intuitive enough for AI agents to help humans build complex LLM applications.
 
 <div align="center">
   <img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/meme.jpg?raw=true" width="400"/>
@@ -251,12 +441,12 @@ A [100-line](https://github.com/the-pocket/PocketFlow/blob/main/pocketflow/__ini
 
 We model the LLM workflow as a **Graph + Shared Store**:
 
-- [Node](./core_abstraction/node.md) handles simple (LLM) tasks.
-- [Flow](./core_abstraction/flow.md) connects nodes through **Actions** (labeled edges).
-- [Shared Store](./core_abstraction/communication.md) enables communication between nodes within flows.
-- [Batch](./core_abstraction/batch.md) nodes/flows allow for data-intensive tasks.
-- [Async](./core_abstraction/async.md) nodes/flows allow waiting for asynchronous tasks.
-- [(Advanced) Parallel](./core_abstraction/parallel.md) nodes/flows handle I/O-bound tasks.
+*   [Node](./core_abstraction/node.md) handles simple (LLM) tasks.
+*   [Flow](./core_abstraction/flow.md) connects nodes through **Actions** (labeled edges).
+*   [Shared Store](./core_abstraction/communication.md) enables communication between nodes within flows.
+*   [Batch](./core_abstraction/batch.md) nodes/flows allow for data-intensive tasks.
+*   [Async](./core_abstraction/async.md) nodes/flows allow waiting for asynchronous tasks.
+*   [(Advanced) Parallel](./core_abstraction/parallel.md) nodes/flows handle I/O-bound tasks.
 
 <div align="center">
   <img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/abstraction.png" width="500"/>
@@ -266,12 +456,12 @@ We model the LLM workflow as a **Graph + Shared Store**:
 
 From there, it’s easy to implement popular design patterns:
 
-- [Agent](./design_pattern/agent.md) autonomously makes decisions.
-- [Workflow](./design_pattern/workflow.md) chains multiple tasks into pipelines.
-- [RAG](./design_pattern/rag.md) integrates data retrieval with generation.
-- [Map Reduce](./design_pattern/mapreduce.md) splits data tasks into Map and Reduce steps.
-- [Structured Output](./design_pattern/structure.md) formats outputs consistently.
-- [(Advanced) Multi-Agents](./design_pattern/multi_agent.md) coordinate multiple agents.
+*   [Agent](./design_pattern/agent.md) autonomously makes decisions.
+*   [Workflow](./design_pattern/workflow.md) chains multiple tasks into pipelines.
+*   [RAG](./design_pattern/rag.md) integrates data retrieval with generation.
+*   [Map Reduce](./design_pattern/mapreduce.md) splits data tasks into Map and Reduce steps.
+*   [Structured Output](./design_pattern/structure.md) formats outputs consistently.
+*   [(Advanced) Multi-Agents](./design_pattern/multi_agent.md) coordinate multiple agents.
 
 <div align="center">
   <img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/design.png" width="500"/>
@@ -281,26 +471,22 @@ From there, it’s easy to implement popular design patterns:
 
 We **do not** provide built-in utilities. Instead, we offer *examples*—please *implement your own*:
 
-- [LLM Wrapper](./utility_function/llm.md)
-- [Viz and Debug](./utility_function/viz.md)
-- [Web Search](./utility_function/websearch.md)
-- [Chunking](./utility_function/chunking.md)
-- [Embedding](./utility_function/embedding.md)
-- [Vector Databases](./utility_function/vector.md)
-- [Text-to-Speech](./utility_function/text_to_speech.md)
+*   [LLM Wrapper](./utility_function/llm.md)
+*   [Viz and Debug](./utility_function/viz.md)
+*   [Web Search](./utility_function/websearch.md)
+*   [Chunking](./utility_function/chunking.md)
+*   [Embedding](./utility_function/embedding.md)
+*   [Vector Databases](./utility_function/vector.md)
+*   [Text-to-Speech](./utility_function/text_to_speech.md)
 
 **Why not built-in?**: I believe it's a *bad practice* for vendor-specific APIs in a general framework:
-- *API Volatility*: Frequent changes lead to heavy maintenance for hardcoded APIs.
-- *Flexibility*: You may want to switch vendors, use fine-tuned models, or run them locally.
-- *Optimizations*: Prompt caching, batching, and streaming are easier without vendor lock-in.
+*   *API Volatility*: Frequent changes lead to heavy maintenance for hardcoded APIs.
+*   *Flexibility*: You may want to switch vendors, use fine-tuned models, or run them locally.
+*   *Optimizations*: Prompt caching, batching, and streaming are easier without vendor lock-in.
 
-## Ready to build your Apps? 
+## Ready to build your Apps?
 
 Check out [Agentic Coding Guidance](./guide.md), the fastest way to develop LLM projects with Pocket Flow!
-
-================================================
-File: docs/core_abstraction/async.md
-================================================
 ---
 layout: default
 title: "(Advanced) Async"
@@ -312,9 +498,9 @@ nav_order: 5
 
 **Async** Nodes implement `prep_async()`, `exec_async()`, `exec_fallback_async()`, and/or `post_async()`. This is useful for:
 
-1. **prep_async()**: For *fetching/reading data (files, APIs, DB)* in an I/O-friendly way.
-2. **exec_async()**: Typically used for async LLM calls.
-3. **post_async()**: For *awaiting user feedback*, *coordinating across multi-agents* or any additional async steps after `exec_async()`.
+1.  **prep_async()**: For *fetching/reading data (files, APIs, DB)* in an I/O-friendly way.
+2.  **exec_async()**: Typically used for async LLM calls.
+3.  **post_async()**: For *awaiting user feedback*, *coordinating across multi-agents* or any additional async steps after `exec_async()`.
 
 **Note**: `AsyncNode` must be wrapped in `AsyncFlow`. `AsyncFlow` can also include regular (sync) nodes.
 
@@ -356,10 +542,6 @@ async def main():
 
 asyncio.run(main())
 ```
-
-================================================
-File: docs/core_abstraction/batch.md
-================================================
 ---
 layout: default
 title: "Batch"
@@ -370,16 +552,16 @@ nav_order: 4
 # Batch
 
 **Batch** makes it easier to handle large inputs in one Node or **rerun** a Flow multiple times. Example use cases:
-- **Chunk-based** processing (e.g., splitting large texts).
-- **Iterative** processing over lists of input items (e.g., user queries, files, URLs).
+*   **Chunk-based** processing (e.g., splitting large texts).
+*   **Iterative** processing over lists of input items (e.g., user queries, files, URLs).
 
 ## 1. BatchNode
 
 A **BatchNode** extends `Node` but changes `prep()` and `exec()`:
 
-- **`prep(shared)`**: returns an **iterable** (e.g., list, generator).
-- **`exec(item)`**: called **once** per item in that iterable.
-- **`post(shared, prep_res, exec_res_list)`**: after all items are processed, receives a **list** of results (`exec_res_list`) and returns an **Action**.
+*   **`prep(shared)`**: returns an **iterable** (e.g., list, generator).
+*   **`exec(item)`**: called **once** per item in that iterable.
+*   **`post(shared, prep_res, exec_res_list)`**: after all items are processed, receives a **list** of results (`exec_res_list`) and returns an **Action**.
 
 
 ### Example: Summarize a Large File
@@ -432,19 +614,19 @@ summarize_all_files.run(shared)
 ```
 
 ### Under the Hood
-1. `prep(shared)` returns a list of param dicts—e.g., `[{filename: "file1.txt"}, {filename: "file2.txt"}, ...]`.
-2. The **BatchFlow** loops through each dict. For each one:
-   - It merges the dict with the BatchFlow’s own `params`.
-   - It calls `flow.run(shared)` using the merged result.
-3. This means the sub-Flow is run **repeatedly**, once for every param dict.
+1.  `prep(shared)` returns a list of param dicts—e.g., `[{filename: "file1.txt"}, {filename: "file2.txt"}, ...]`.
+2.  The **BatchFlow** loops through each dict. For each one:
+    *   It merges the dict with the BatchFlow’s own `params`.
+    *   It calls `flow.run(shared)` using the merged result.
+3.  This means the sub-Flow is run **repeatedly**, once for every param dict.
 
 ---
 
 ## 3. Nested or Multi-Level Batches
 
 You can nest a **BatchFlow** in another **BatchFlow**. For instance:
-- **Outer** batch: returns a list of diretory param dicts (e.g., `{"directory": "/pathA"}`, `{"directory": "/pathB"}`, ...).
-- **Inner** batch: returning a list of per-file param dicts.
+*   **Outer** batch: returns a list of diretory param dicts (e.g., `{"directory": "/pathA"}`, `{"directory": "/pathB"}`, ...).
+*   **Inner** batch: returning a list of per-file param dicts.
 
 At each level, **BatchFlow** merges its own param dict with the parent’s. By the time you reach the **innermost** node, the final `params` is the merged result of **all** parents in the chain. This way, a nested structure can keep track of the entire context (e.g., directory + file name) at once.
 
@@ -466,10 +648,6 @@ class DirectoryBatchFlow(BatchFlow):
 inner_flow = FileBatchFlow(start=MapSummaries())
 outer_flow = DirectoryBatchFlow(start=inner_flow)
 ```
-
-================================================
-File: docs/core_abstraction/communication.md
-================================================
 ---
 layout: default
 title: "Communication"
@@ -481,18 +659,18 @@ nav_order: 3
 
 Nodes and Flows **communicate** in 2 ways:
 
-1. **Shared Store (for almost all the cases)** 
+1.  **Shared Store (for almost all the cases)**
 
-   - A global data structure (often an in-mem dict) that all nodes can read ( `prep()`) and write (`post()`).  
-   - Great for data results, large content, or anything multiple nodes need.
-   - You shall design the data structure and populate it ahead.
-     
-   - > **Separation of Concerns:** Use `Shared Store` for almost all cases to separate *Data Schema* from *Compute Logic*!  This approach is both flexible and easy to manage, resulting in more maintainable code. `Params` is more a syntax sugar for [Batch](./batch.md).
-     {: .best-practice }
+    *   A global data structure (often an in-mem dict) that all nodes can read ( `prep()`) and write (`post()`).
+    *   Great for data results, large content, or anything multiple nodes need.
+    *   You shall design the data structure and populate it ahead.
 
-2. **Params (only for [Batch](./batch.md))** 
-   - Each node has a local, ephemeral `params` dict passed in by the **parent Flow**, used as an identifier for tasks. Parameter keys and values shall be **immutable**.
-   - Good for identifiers like filenames or numeric IDs, in Batch mode.
+    *   > **Separation of Concerns:** Use `Shared Store` for almost all cases to separate *Data Schema* from *Compute Logic*!  This approach is both flexible and easy to manage, resulting in more maintainable code. `Params` is more a syntax sugar for [Batch](./batch.md).
+        {: .best-practice }
+
+2.  **Params (only for [Batch](./batch.md))**
+    *   Each node has a local, ephemeral `params` dict passed in by the **parent Flow**, used as an identifier for tasks. Parameter keys and values shall be **immutable**.
+    *   Good for identifiers like filenames or numeric IDs, in Batch agent.
 
 If you know memory management, think of the **Shared Store** like a **heap** (shared by all function calls), and **Params** like a **stack** (assigned by the caller).
 
@@ -544,20 +722,20 @@ flow.run(shared)
 ```
 
 Here:
-- `LoadData` writes to `shared["data"]`.
-- `Summarize` reads from `shared["data"]`, summarizes, and writes to `shared["summary"]`.
+*   `LoadData` writes to `shared["data"]`.
+*   `Summarize` reads from `shared["data"]`, summarizes, and writes to `shared["summary"]`.
 
 ---
 
 ## 2. Params
 
 **Params** let you store *per-Node* or *per-Flow* config that doesn't need to live in the shared store. They are:
-- **Immutable** during a Node's run cycle (i.e., they don't change mid-`prep->exec->post`).
-- **Set** via `set_params()`.
-- **Cleared** and updated each time a parent Flow calls it.
+*   **Immutable** during a Node's run cycle (i.e., they don't change mid-`prep->exec->post`).
+*   **Set** via `set_params()`.
+*   **Cleared** and updated each time a parent Flow calls it.
 
-> Only set the uppermost Flow params because others will be overwritten by the parent Flow. 
-> 
+> Only set the uppermost Flow params because others will be overwritten by the parent Flow.
+>
 > If you need to set child node params, see [Batch](./batch.md).
 {: .warning }
 
@@ -596,10 +774,6 @@ flow = Flow(start=node)
 flow.set_params({"filename": "doc2.txt"})
 flow.run(shared)  # The node summarizes doc2, not doc1
 ```
-
-================================================
-File: docs/core_abstraction/flow.md
-================================================
 ---
 layout: default
 title: "Flow"
@@ -617,12 +791,12 @@ Each Node's `post()` returns an **Action** string. By default, if `post()` doesn
 
 You define transitions with the syntax:
 
-1. **Basic default transition**: `node_a >> node_b`
-  This means if `node_a.post()` returns `"default"`, go to `node_b`. 
-  (Equivalent to `node_a - "default" >> node_b`)
+1.  **Basic default transition**: `node_a >> node_b`
+    This means if `node_a.post()` returns `"default"`, go to `node_b`.
+    (Equivalent to `node_a - "default" >> node_b`)
 
-2. **Named action transition**: `node_a - "action_name" >> node_b`
-  This means if `node_a.post()` returns `"action_name"`, go to `node_b`.
+2.  **Named action transition**: `node_a - "action_name" >> node_b`
+    This means if `node_a.post()` returns `"action_name"`, go to `node_b`.
 
 It's possible to create loops, branching, or multi-step flows.
 
@@ -640,18 +814,18 @@ flow = Flow(start=node_a)
 flow.run(shared)
 ```
 
-- When you run the flow, it executes `node_a`.  
-- Suppose `node_a.post()` returns `"default"`.  
-- The flow then sees `"default"` Action is linked to `node_b` and runs `node_b`.  
-- `node_b.post()` returns `"default"` but we didn't define `node_b >> something_else`. So the flow ends there.
+*   When you run the flow, it executes `node_a`.
+*   Suppose `node_a.post()` returns `"default"`.
+*   The flow then sees `"default"` Action is linked to `node_b` and runs `node_b`.
+*   `node_b.post()` returns `"default"` but we didn't define `node_b >> something_else`. So the flow ends there.
 
 ### Example: Branching & Looping
 
 Here's a simple expense approval flow that demonstrates branching and looping. The `ReviewExpense` node can return three possible Actions:
 
-- `"approved"`: expense is approved, move to payment processing
-- `"needs_revision"`: expense needs changes, send back for revision 
-- `"rejected"`: expense is denied, finish the process
+*   `"approved"`: expense is approved, move to payment processing
+*   `"needs_revision"`: expense needs changes, send back for revision
+*   `"rejected"`: expense is denied, finish the process
 
 We can wire them like this:
 
@@ -669,9 +843,9 @@ flow = Flow(start=review)
 
 Let's see how it flows:
 
-1. If `review.post()` returns `"approved"`, the expense moves to the `payment` node
-2. If `review.post()` returns `"needs_revision"`, it goes to the `revise` node, which then loops back to `review`
-3. If `review.post()` returns `"rejected"`, it moves to the `finish` node and stops
+1.  If `review.post()` returns `"approved"`, the expense moves to the `payment` node
+2.  If `review.post()` returns `"needs_revision"`, it goes to the `revise` node, which then loops back to `review`
+3.  If `review.post()` returns `"rejected"`, it moves to the `finish` node and stops
 
 ```mermaid
 flowchart TD
@@ -685,12 +859,12 @@ flowchart TD
 
 ### Running Individual Nodes vs. Running a Flow
 
-- `node.run(shared)`: Just runs that node alone (calls `prep->exec->post()`), returns an Action. 
-- `flow.run(shared)`: Executes from the start node, follows Actions to the next node, and so on until the flow can't continue.
+*   `node.run(shared)`: Just runs that node alone (calls `prep->exec->post()`), returns an Action.
+*   `flow.run(shared)`: Executes from the start node, follows Actions to the next node, and so on until the flow can't continue.
 
 > `node.run(shared)` **does not** proceed to the successor.
 > This is mainly for debugging or testing a single node.
-> 
+>
 > Always use `flow.run(...)` in production to ensure the full pipeline runs correctly.
 {: .warning }
 
@@ -698,16 +872,16 @@ flowchart TD
 
 A **Flow** can act like a Node, which enables powerful composition patterns. This means you can:
 
-1. Use a Flow as a Node within another Flow's transitions.  
-2. Combine multiple smaller Flows into a larger Flow for reuse.  
-3. Node `params` will be a merging of **all** parents' `params`.
+1.  Use a Flow as a Node within another Flow's transitions.
+2.  Combine multiple smaller Flows into a larger Flow for reuse.
+3.  Node `params` will be a merging of **all** parents' `params`.
 
 ### Flow's Node Methods
 
 A **Flow** is also a **Node**, so it will run `prep()` and `post()`. However:
 
-- It **won't** run `exec()`, as its main logic is to orchestrate its nodes.
-- `post()` always receives `None` for `exec_res` and should instead get the flow execution results from the shared store.
+*   It **won't** run `exec()`, as its main logic is to orchestrate its nodes.
+*   `post()` always receives `None` for `exec_res` and should instead get the flow execution results from the shared store.
 
 ### Basic Flow Nesting
 
@@ -726,9 +900,9 @@ parent_flow = Flow(start=subflow)
 ```
 
 When `parent_flow.run()` executes:
-1. It starts `subflow`
-2. `subflow` runs through its nodes (`node_a->node_b`)
-3. After `subflow` completes, execution continues to `node_c`
+1.  It starts `subflow`
+2.  `subflow` runs through its nodes (`node_a->node_b`)
+3.  After `subflow` completes, execution continues to `node_c`
 
 ### Example: Order Processing Pipeline
 
@@ -778,10 +952,6 @@ flowchart LR
         inventoryFlow --> shippingFlow
     end
 ```
-
-================================================
-File: docs/core_abstraction/node.md
-================================================
 ---
 layout: default
 title: "Node"
@@ -797,22 +967,22 @@ A **Node** is the smallest building block. Each Node has 3 steps `prep->exec->po
   <img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/node.png?raw=true" width="400"/>
 </div>
 
-1. `prep(shared)`
-   - **Read and preprocess data** from `shared` store. 
-   - Examples: *query DB, read files, or serialize data into a string*.
-   - Return `prep_res`, which is used by `exec()` and `post()`.
+1.  `prep(shared)`
+    *   **Read and preprocess data** from `shared` store.
+    *   Examples: *query DB, read files, or serialize data into a string*.
+    *   Return `prep_res`, which is used by `exec()` and `post()`.
 
-2. `exec(prep_res)`
-   - **Execute compute logic**, with optional retries and error handling (below).
-   - Examples: *(mostly) LLM calls, remote APIs, tool use*.
-   - ⚠️ This shall be only for compute and **NOT** access `shared`.
-   - ⚠️ If retries enabled, ensure idempotent implementation.
-   - Return `exec_res`, which is passed to `post()`.
+2.  `exec(prep_res)`
+    *   **Execute compute logic**, with optional retries and error handling (below).
+    *   Examples: *(mostly) LLM calls, remote APIs, tool use*.
+    *   ⚠️ This shall be only for compute and **NOT** access `shared`.
+    *   ⚠️ If retries enabled, ensure idempotent implementation.
+    *   Return `exec_res`, which is passed to `post()`.
 
-3. `post(shared, prep_res, exec_res)`
-   - **Postprocess and write data** back to `shared`.
-   - Examples: *update DB, change states, log results*.
-   - **Decide the next action** by returning a *string* (`action = "default"` if *None*).
+3.  `post(shared, prep_res, exec_res)`
+    *   **Postprocess and write data** back to `shared`.
+    *   Examples: *update DB, change states, log results*.
+    *   **Decide the next action** by returning a *string* (`action = "default"` if *None*).
 
 > **Why 3 steps?** To enforce the principle of *separation of concerns*. The data storage and data processing are operated separately.
 >
@@ -823,22 +993,22 @@ A **Node** is the smallest building block. Each Node has 3 steps `prep->exec->po
 
 You can **retry** `exec()` if it raises an exception via two parameters when define the Node:
 
-- `max_retries` (int): Max times to run `exec()`. The default is `1` (**no** retry).
-- `wait` (int): The time to wait (in **seconds**) before next retry. By default, `wait=0` (no waiting). 
+*   `max_retries` (int): Max times to run `exec()`. The default is `1` (**no** retry).
+*   `wait` (int): The time to wait (in **seconds**) before next retry. By default, `wait=0` (no waiting).
 `wait` is helpful when you encounter rate-limits or quota errors from your LLM provider and need to back off.
 
-```python 
+```python
 my_node = SummarizeFile(max_retries=3, wait=10)
 ```
 
 When an exception occurs in `exec()`, the Node automatically retries until:
 
-- It either succeeds, or
-- The Node has retried `max_retries - 1` times already and fails on the last attempt.
+*   It either succeeds, or
+*   The Node has retried `max_retries - 1` times already and fails on the last attempt.
 
 You can get the current retry times (0-based) from `self.cur_retry`.
 
-```python 
+```python
 class RetryNode(Node):
     def exec(self, prep_res):
         print(f"Retry {self.cur_retry} times")
@@ -849,7 +1019,7 @@ class RetryNode(Node):
 
 To **gracefully handle** the exception (after all retries) rather than raising it, override:
 
-```python 
+```python
 def exec_fallback(self, prep_res, exc):
     raise exc
 ```
@@ -858,7 +1028,7 @@ By default, it just re-raises exception. But you can return a fallback result in
 
 ### Example: Summarize file
 
-```python 
+```python
 class SummarizeFile(Node):
     def prep(self, shared):
         return shared["data"]
@@ -887,11 +1057,6 @@ action_result = summarize_node.run(shared)
 print("Action returned:", action_result)  # "default"
 print("Summary stored:", shared["summary"])
 ```
-
-
-================================================
-File: docs/core_abstraction/parallel.md
-================================================
 ---
 layout: default
 title: "(Advanced) Parallel"
@@ -901,16 +1066,16 @@ nav_order: 6
 
 # (Advanced) Parallel
 
-**Parallel** Nodes and Flows let you run multiple **Async** Nodes and Flows  **concurrently**—for example, summarizing multiple texts at once. This can improve performance by overlapping I/O and compute. 
+**Parallel** Nodes and Flows let you run multiple **Async** Nodes and Flows  **concurrently**—for example, summarizing multiple texts at once. This can improve performance by overlapping I/O and compute.
 
 > Because of Python’s GIL, parallel nodes and flows can’t truly parallelize CPU-bound tasks (e.g., heavy numerical computations). However, they excel at overlapping I/O-bound work—like LLM calls, database queries, API requests, or file I/O.
 {: .warning }
 
-> - **Ensure Tasks Are Independent**: If each item depends on the output of a previous item, **do not** parallelize.
-> 
-> - **Beware of Rate Limits**: Parallel calls can **quickly** trigger rate limits on LLM services. You may need a **throttling** mechanism (e.g., semaphores or sleep intervals).
-> 
-> - **Consider Single-Node Batch APIs**: Some LLMs offer a **batch inference** API where you can send multiple prompts in a single call. This is more complex to implement but can be more efficient than launching many parallel requests and mitigates rate limits.
+> *   **Ensure Tasks Are Independent**: If each item depends on the output of a previous item, **do not** parallelize.
+>
+> *   **Beware of Rate Limits**: Parallel calls can **quickly** trigger rate limits on LLM services. You may need a **throttling** mechanism (e.g., semaphores or sleep intervals).
+>
+> *   **Consider Single-Node Batch APIs**: Some LLMs offer a **batch inference** API where you can send multiple prompts in a single call. This is more complex to implement but can be more efficient than launching many parallel requests and mitigates rate limits.
 {: .best-practice }
 
 ## AsyncParallelBatchNode
@@ -948,10 +1113,6 @@ sub_flow = AsyncFlow(start=LoadAndSummarizeFile())
 parallel_flow = SummarizeMultipleFiles(start=sub_flow)
 await parallel_flow.run_async(shared)
 ```
-
-================================================
-File: docs/design_pattern/agent.md
-================================================
 ---
 layout: default
 title: "Agent"
@@ -969,9 +1130,9 @@ Agent is a powerful design pattern in which nodes can take dynamic actions based
 
 ## Implement Agent with Graph
 
-1. **Context and Action:** Implement nodes that supply context and perform actions.  
-2. **Branching:** Use branching to connect each action node to an agent node. Use action to allow the agent to direct the [flow](../core_abstraction/flow.md) between nodes—and potentially loop back for multi-step.
-3. **Agent Node:** Provide a prompt to decide action—for example:
+1.  **Context and Action:** Implement nodes that supply context and perform actions.
+2.  **Branching:** Use branching to connect each action node to an agent node. Use action to allow the agent to direct the [flow](../core_abstraction/flow.md) between nodes—and potentially loop back for multi-step.
+3.  **Agent Node:** Provide a prompt to decide action—for example:
 
 ```python
 f"""
@@ -1006,26 +1167,26 @@ parameters:
 
 The core of building **high-performance** and **reliable** agents boils down to:
 
-1. **Context Management:** Provide *relevant, minimal context.* For example, rather than including an entire chat history, retrieve the most relevant via [RAG](./rag.md). Even with larger context windows, LLMs still fall victim to ["lost in the middle"](https://arxiv.org/abs/2307.03172), overlooking mid-prompt content.
+1.  **Context Management:** Provide *relevant, minimal context.* For example, rather than including an entire chat history, retrieve the most relevant via [RAG](./rag.md). Even with larger context windows, LLMs still fall victim to ["lost in the middle"](https://arxiv.org/abs/2307.03172), overlooking mid-prompt content.
 
-2. **Action Space:** Provide *a well-structured and unambiguous* set of actions—avoiding overlap like separate `read_databases` or  `read_csvs`. Instead, import CSVs into the database.
+2.  **Action Space:** Provide *a well-structured and unambiguous* set of actions—avoiding overlap like separate `read_databases` or  `read_csvs`. Instead, import CSVs into the database.
 
 ## Example Good Action Design
 
-- **Incremental:** Feed content in manageable chunks (500 lines or 1 page) instead of all at once.
+*   **Incremental:** Feed content in manageable chunks (500 lines or 1 page) instead of all at once.
 
-- **Overview-zoom-in:** First provide high-level structure (table of contents, summary), then allow drilling into details (raw texts).
+*   **Overview-zoom-in:** First provide high-level structure (table of contents, summary), then allow drilling into details (raw texts).
 
-- **Parameterized/Programmable:** Instead of fixed actions, enable parameterized (columns to select) or programmable (SQL queries) actions, for example, to read CSV files.
+*   **Parameterized/Programmable:** Instead of fixed actions, enable parameterized (columns to select) or programmable (SQL queries) actions, for example, to read CSV files.
 
-- **Backtracking:** Let the agent undo the last step instead of restarting entirely, preserving progress when encountering errors or dead ends.
+*   **Backtracking:** Let the agent undo the last step instead of restarting entirely, preserving progress when encountering errors or dead ends.
 
 ## Example: Search Agent
 
 This agent:
-1. Decides whether to search or answer
-2. If searches, loops back to decide if more search needed
-3. Answers when enough context gathered
+1.  Decides whether to search or answer
+2.  If searches, loops back to decide if more search needed
+3.  Answers when enough context gathered
 
 ```python
 class DecideAction(Node):
@@ -1102,10 +1263,6 @@ search - "decide" >> decide  # Loop back
 flow = Flow(start=decide)
 flow.run({"query": "Who won the Nobel Prize in Physics 2024?"})
 ```
-
-================================================
-File: docs/design_pattern/mapreduce.md
-================================================
 ---
 layout: default
 title: "Map Reduce"
@@ -1116,10 +1273,10 @@ nav_order: 4
 # Map Reduce
 
 MapReduce is a design pattern suitable when you have either:
-- Large input data (e.g., multiple files to process), or
-- Large output data (e.g., multiple forms to fill)
+*   Large input data (e.g., multiple files to process), or
+*   Large output data (e.g., multiple forms to fill)
 
-and there is a logical way to break the task into smaller, ideally independent parts. 
+and there is a logical way to break the task into smaller, ideally independent parts.
 
 <div align="center">
   <img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/mapreduce.png?raw=true" width="400"/>
@@ -1176,10 +1333,6 @@ flow.run(shared)
 print("Individual Summaries:", shared["file_summaries"])
 print("\nFinal Summary:\n", shared["all_files_summary"])
 ```
-
-================================================
-File: docs/design_pattern/rag.md
-================================================
 ---
 layout: default
 title: "RAG"
@@ -1195,16 +1348,16 @@ For certain LLM tasks like answering questions, providing relevant context is es
   <img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/rag.png?raw=true" width="400"/>
 </div>
 
-1. **Offline stage**: Preprocess and index documents ("building the index").
-2. **Online stage**: Given a question, generate answers by retrieving the most relevant context.
+1.  **Offline stage**: Preprocess and index documents ("building the index").
+2.  **Online stage**: Given a question, generate answers by retrieving the most relevant context.
 
 ---
 ## Stage 1: Offline Indexing
 
 We create three Nodes:
-1. `ChunkDocs` – [chunks](../utility_function/chunking.md) raw text.
-2. `EmbedDocs` – [embeds](../utility_function/embedding.md) each chunk.
-3. `StoreIndex` – stores embeddings into a [vector database](../utility_function/vector.md).
+1.  `ChunkDocs` – [chunks](../utility_function/chunking.md) raw text.
+2.  `EmbedDocs` – [embeds](../utility_function/embedding.md) each chunk.
+3.  `StoreIndex` – stores embeddings into a [vector database](../utility_function/vector.md).
 
 ```python
 class ChunkDocs(BatchNode):
@@ -1279,9 +1432,9 @@ OfflineFlow.run(shared)
 ## Stage 2: Online Query & Answer
 
 We have 3 nodes:
-1. `EmbedQuery` – embeds the user’s question.
-2. `RetrieveDocs` – retrieves top chunk from the index.
-3. `GenerateAnswer` – calls the LLM with the question + chunk to produce the final answer.
+1.  `EmbedQuery` – embeds the user’s question.
+2.  `RetrieveDocs` – retrieves top chunk from the index.
+3.  `GenerateAnswer` – calls the LLM with the question + chunk to produce the final answer.
 
 ```python
 class EmbedQuery(Node):
@@ -1341,10 +1494,6 @@ shared["question"] = "Why do people like cats?"
 OnlineFlow.run(shared)
 # final answer in shared["answer"]
 ```
-
-================================================
-File: docs/design_pattern/structure.md
-================================================
 ---
 layout: default
 title: "Structured Output"
@@ -1357,15 +1506,15 @@ nav_order: 5
 In many use cases, you may want the LLM to output a specific structure, such as a list or a dictionary with predefined keys.
 
 There are several approaches to achieve a structured output:
-- **Prompting** the LLM to strictly return a defined structure.
-- Using LLMs that natively support **schema enforcement**.
-- **Post-processing** the LLM's response to extract structured content.
+*   **Prompting** the LLM to strictly return a defined structure.
+*   Using LLMs that natively support **schema enforcement**.
+*   **Post-processing** the LLM's response to extract structured content.
 
 In practice, **Prompting** is simple and reliable for modern LLMs.
 
 ### Example Use Cases
 
-- Extracting Key Information 
+*   Extracting Key Information
 
 ```yaml
 product:
@@ -1376,7 +1525,7 @@ product:
     Recommended for advanced users.
 ```
 
-- Summarizing Documents into Bullet Points
+*   Summarizing Documents into Bullet Points
 
 ```yaml
 summary:
@@ -1385,7 +1534,7 @@ summary:
   - Suitable for all skill levels.
 ```
 
-- Generating Configuration Files
+*   Generating Configuration Files
 
 ```yaml
 server:
@@ -1397,8 +1546,8 @@ server:
 ## Prompt Engineering
 
 When prompting the LLM to produce **structured** output:
-1. **Wrap** the structure in code fences (e.g., `yaml`).
-2. **Validate** that all required fields exist (and let `Node` handles retry).
+1.  **Wrap** the structure in code fences (e.g., `yaml`).
+2.  **Validate** that all required fields exist (and let `Node` handles retry).
 
 ### Example Text Summarization
 
@@ -1437,7 +1586,7 @@ summary:
 
 Current LLMs struggle with escaping. YAML is easier with strings since they don't always need quotes.
 
-**In JSON**  
+**In JSON**
 
 ```json
 {
@@ -1445,10 +1594,10 @@ Current LLMs struggle with escaping. YAML is easier with strings since they don'
 }
 ```
 
-- Every double quote inside the string must be escaped with `\"`.
-- Each newline in the dialogue must be represented as `\n`.
+*   Every double quote inside the string must be escaped with `\"`.
+*   Each newline in the dialogue must be represented as `\n`.
 
-**In YAML**  
+**In YAML**
 
 ```yaml
 dialogue: |
@@ -1457,12 +1606,8 @@ dialogue: |
   I am good."
 ```
 
-- No need to escape interior quotes—just place the entire text under a block literal (`|`).
-- Newlines are naturally preserved without needing `\n`.
-
-================================================
-File: docs/design_pattern/workflow.md
-================================================
+*   No need to escape interior quotes—just place the entire text under a block literal (`|`).
+*   Newlines are naturally preserved without needing `\n`.
 ---
 layout: default
 title: "Workflow"
@@ -1478,9 +1623,9 @@ Many real-world tasks are too complex for one LLM call. The solution is to **Tas
   <img src="https://github.com/the-pocket/PocketFlow/raw/main/assets/workflow.png?raw=true" width="400"/>
 </div>
 
-> - You don't want to make each task **too coarse**, because it may be *too complex for one LLM call*.
-> - You don't want to make each task **too granular**, because then *the LLM call doesn't have enough context* and results are *not consistent across nodes*.
-> 
+> *   You don't want to make each task **too coarse**, because it may be *too complex for one LLM call*.
+> *   You don't want to make each task **too granular**, because then *the LLM call doesn't have enough context* and results are *not consistent across nodes*.
+>
 > You usually need multiple *iterations* to find the *sweet spot*. If the task has too many *edge cases*, consider using [Agents](./agent.md).
 {: .best-practice }
 
@@ -1516,10 +1661,6 @@ writing_flow.run(shared)
 ```
 
 For *dynamic cases*, consider using [Agents](./agent.md).
-
-================================================
-File: docs/utility_function/llm.md
-================================================
 ---
 layout: default
 title: "LLM Wrapper"
@@ -1529,16 +1670,16 @@ nav_order: 1
 
 # LLM Wrappers
 
-Check out libraries like [litellm](https://github.com/BerriAI/litellm). 
+Check out libraries like [litellm](https://github.com/BerriAI/litellm).
 Here, we provide some minimal example implementations:
 
-1. OpenAI
+1.  OpenAI
     ```python
     def call_llm(prompt):
         from openai import OpenAI
         client = OpenAI(api_key="YOUR_API_KEY_HERE")
         r = client.chat.completions.create(
-            model="gpt-4o",
+            agent="gpt-4o",
             messages=[{"role": "user", "content": prompt}]
         )
         return r.choices[0].message.content
@@ -1549,7 +1690,7 @@ Here, we provide some minimal example implementations:
     > Store the API key in an environment variable like OPENAI_API_KEY for security.
     {: .best-practice }
 
-2. Claude (Anthropic)
+2.  Claude (Anthropic)
     ```python
     def call_llm(prompt):
         from anthropic import Anthropic
@@ -1562,19 +1703,19 @@ Here, we provide some minimal example implementations:
         return response.content
     ```
 
-3. Google (Generative AI Studio / PaLM API)
+3.  Google (Generative AI Studio / PaLM API)
     ```python
     def call_llm(prompt):
         import google.generativeai as genai
         genai.configure(api_key="YOUR_API_KEY_HERE")
         response = genai.generate_text(
-            model="models/text-bison-001",
+            model="agents/text-bison-001",
             prompt=prompt
         )
         return response.result
     ```
 
-4. Azure (Azure OpenAI)
+4.  Azure (Azure OpenAI)
     ```python
     def call_llm(prompt):
         from openai import AzureOpenAI
@@ -1590,7 +1731,7 @@ Here, we provide some minimal example implementations:
         return r.choices[0].message.content
     ```
 
-5. Ollama (Local LLM)
+5.  Ollama (Local LLM)
     ```python
     def call_llm(prompt):
         from ollama import chat
@@ -1604,7 +1745,7 @@ Here, we provide some minimal example implementations:
 ## Improvements
 Feel free to enhance your `call_llm` function as needed. Here are examples:
 
-- Handle chat history:
+*   Handle chat history:
 
 ```python
 def call_llm(messages):
@@ -1617,7 +1758,7 @@ def call_llm(messages):
     return r.choices[0].message.content
 ```
 
-- Add in-memory caching 
+*   Add in-memory caching
 
 ```python
 from functools import lru_cache
@@ -1652,7 +1793,7 @@ class SummarizeNode(Node):
         return call_llm(f"Summarize: {text}", self.cur_retry==0)
 ```
 
-- Enable logging:
+*   Enable logging:
 
 ```python
 def call_llm(prompt):
@@ -1661,4 +1802,3 @@ def call_llm(prompt):
     response = ... # Your implementation here
     logging.info(f"Response: {response}")
     return response
-```

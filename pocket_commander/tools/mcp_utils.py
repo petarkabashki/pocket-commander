@@ -1,11 +1,16 @@
 from typing import Any, Dict, Callable, List, Coroutine
 import asyncio
 
+from mcp import ClientSession, types # type: ignore
+
 from pocket_commander.tools.definition import ToolDefinition, ToolParameterDefinition
 
-# This is a placeholder for where your actual MCP client logic would reside.
-# You would typically have a class or a set of functions to interact with MCP servers.
-# from some_mcp_client_library import actual_mcp_client
+# TODO: Move this to a proper configuration system
+MCP_SERVER_ADDRESSES = {
+    "example-mcp-server": "http://localhost:8000", # Example, adjust as needed
+    "another-mcp-server": "https://mcp.example.com",
+    # Add other known MCP server addresses here
+}
 
 async def mcp_tool_caller(
     server_name: str, 
@@ -13,11 +18,10 @@ async def mcp_tool_caller(
     arguments: Dict[str, Any]
 ) -> Any:
     """
-    Generic caller for MCP (Model Context Protocol) tools.
+    Generic caller for MCP (Model Context Protocol) tools using the SDK.
 
     This function is responsible for dispatching a tool call to the specified MCP server
-    with the given arguments. The actual communication with the MCP server needs to be
-    implemented here, potentially using a dedicated MCP client library.
+    with the given arguments using the agent-context-protocol-sdk.
 
     Args:
         server_name: The name of the MCP server.
@@ -26,32 +30,57 @@ async def mcp_tool_caller(
 
     Returns:
         The result from the MCP tool execution.
+        
+    Raises:
+        ValueError: If the server_name is not found in MCP_SERVER_ADDRESSES.
+        types.Error # TODO: Verify this is the correct MCP SDK error base class: If the SDK raises an error during communication.
+        Exception: For other general errors.
     """
-    # %%# Placeholder: Replace with actual MCP client interaction
-    print(f"[MCP Call] Attempting to call tool '{tool_name}' on server '{server_name}' with arguments: {arguments}")
-    
-    # Example of how you might use an actual MCP client (hypothetical):
-    # try:
-    #     result = await actual_mcp_client.use_tool(
-    #         server_name=server_name,
-    #         tool_name=tool_name,
-    #         arguments=arguments
-    #     )
-    #     print(f"[MCP Call] Success: {result}")
-    #     return result
-    # except Exception as e:
-    #     print(f"[MCP Call] Error calling {tool_name} on {server_name}: {e}")
-    #     raise # Or handle error appropriately
+    target_address = MCP_SERVER_ADDRESSES.get(server_name)
+    if not target_address:
+        raise ValueError(f"Unknown MCP server name: {server_name}. Configure it in MCP_SERVER_ADDRESSES.")
 
-    # Simulating an asynchronous network call
-    await asyncio.sleep(0.1) 
-    
-    # Placeholder success response
-    return {
-        "status": "success",
-        "message": f"MCP tool '{tool_name}' on server '{server_name}' called successfully (simulated).",
-        "received_arguments": arguments
-    }
+    print(f"[MCP Call SDK] Attempting to call tool '{tool_name}' on server '{server_name}' ({target_address}) with arguments: {arguments}")
+
+    try:
+        # Consult SDK documentation for actual client usage and method names
+        async with ClientSession(target_address=target_address) as client: # type: ignore # TODO: Verify ClientSession constructor for HTTP target
+            # Assuming the SDK has a method like use_tool or similar.
+            # The exact method and response structure would depend on the SDK's API.
+            # For example:
+            # response = await client.use_tool(tool_name=tool_name, arguments=arguments)
+            # return response.result # Or however the SDK provides the tool's output
+
+            # Attempt to call the MCP tool using the SDK.
+            # The parameter 'input' for arguments is assumed based on common SDK patterns.
+            # The actual method for extracting the result from the response (e.g., response.payload)
+            # needs to be verified against the agent-context-protocol-sdk documentation.
+            response = await client.use_tool(tool_name=tool_name, input=arguments) # type: ignore
+
+            # TODO: End-user to verify against a live MCP server that `response.payload` (or other attribute)
+            # correctly extracts the tool output from agent-context-protocol-sdk.
+            # Common attributes could be 'payload', 'data', 'result', or the response itself might be the output.
+            if hasattr(response, 'payload'):
+                return response.payload # type: ignore
+            elif hasattr(response, 'result'): # Keep existing checks as fallbacks
+                return response.result # type: ignore
+            elif hasattr(response, 'data'):
+                return response.data # type: ignore
+            else:
+                # If no common attribute is found, return the whole response object.
+                # This allows for inspection and may be the intended behavior if the tool
+                # output is the response object itself.
+                return response
+
+    except types.Error as e: # TODO: Verify this is the correct MCP SDK error base class # Catch specific SDK errors
+        print(f"[MCP Call SDK] MCP Client Error for tool '{tool_name}' on '{server_name}': {e}")
+        # Depending on desired error handling, you might return a structured error
+        # or re-raise the exception. For now, re-raising.
+        raise
+    except Exception as e: # Catch other potential errors (network, etc.)
+        print(f"[MCP Call SDK] General Error for tool '{tool_name}' on '{server_name}': {e}")
+        # Similar to above, re-raising.
+        raise
 
 def create_mcp_tool_definition(
     mcp_server_name: str,

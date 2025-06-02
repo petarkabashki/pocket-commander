@@ -2,15 +2,15 @@
 
 ## 1. Goal
 
-To implement a robust and flexible command execution system within Pocket Commander modes. This system will allow commands to be defined as annotated Python functions with abstracted input/output mechanisms, enhancing the extensibility and power of modes.
+To implement a robust and flexible command execution system within Pocket Commander agents. This system will allow commands to be defined as annotated Python functions with abstracted input/output mechanisms, enhancing the extensibility and power of agents.
 
 ## 2. Core Design Choices (User Confirmed)
 
-*   **Command Naming:** Mode-specific commands will be **bare words** (e.g., `greet`), distinct from built-in `/` prefixed commands.
+*   **Command Naming:** Agent-specific commands will be **bare words** (e.g., `greet`), distinct from built-in `/` prefixed commands.
 *   **Argument Parsing:** Initial implementation will use **simple space-splitting** for arguments. The `AbstractCommandInput` will manage this. Enhancements can be made later.
 *   **Asynchronous Commands:** All command functions defined with the `@command` decorator must be `async def`.
 *   **Error Handling:** Command functions are responsible for catching their own exceptions, logging them (e.g., via `CommandContext`), and using `ctx.output.send_message()` or `ctx.output.send_error()` for user-friendly reporting.
-*   **Command Scope:** Commands will be strictly **local** to the mode in which they are defined.
+*   **Command Scope:** Commands will be strictly **local** to the agent in which they are defined.
 
 ## 3. Phased Implementation Plan
 
@@ -29,19 +29,19 @@ To implement a robust and flexible command execution system within Pocket Comman
         *   `send_data(data: Any, format_hint: Optional[str] = None)`
 3.  **`CommandContext` Class** ([`pocket_commander/commands/core.py`](pocket_commander/commands/core.py:1)):
     *   Passed to command functions.
-    *   Attributes: `input: AbstractCommandInput`, `output: AbstractOutputHandler`, `mode_name: str`, `terminal_app: 'TerminalApp'`, `mode_flow: Any`, `loop: asyncio.AbstractEventLoop`.
+    *   Attributes: `input: AbstractCommandInput`, `output: AbstractOutputHandler`, `agent_name: str`, `terminal_app: 'TerminalApp'`, `agent_flow: Any`, `loop: asyncio.AbstractEventLoop`.
 4.  **`@command` Decorator** ([`pocket_commander/commands/decorators.py`](pocket_commander/commands/decorators.py:1)):
     *   `@command(name: str, description: str, aliases: List[str] = None)`
     *   Attaches `CommandMetadata` to the decorated function (e.g., as `func._command_metadata`).
 
 ### Phase 2: Command Registration and Dispatch
 
-1.  **Command Registry (Per Mode):**
-    *   Mode flow classes (e.g., `MainModeFlow`) will discover commands by inspecting methods for `_command_metadata`.
-    *   A helper like `_discover_commands() -> Dict[str, CommandMetadata]` in mode flows.
-2.  **Command Dispatcher Logic (within Mode Flow's `handle_input` or a dedicated method):**
+1.  **Command Registry (Per Agent):**
+    *   Agent flow classes (e.g., `MainAgentFlow`) will discover commands by inspecting methods for `_command_metadata`.
+    *   A helper like `_discover_commands() -> Dict[str, CommandMetadata]` in agent flows.
+2.  **Command Dispatcher Logic (within Agent Flow's `handle_input` or a dedicated method):**
     *   Parse raw input string for command name and arguments.
-    *   Look up command in the mode's registry.
+    *   Look up command in the agent's registry.
     *   If found: Create `CommandInput`, `CommandContext`, and invoke the command function.
     *   If not found: Pass to default handler (e.g., LLM or echo).
 
@@ -52,19 +52,19 @@ To implement a robust and flexible command execution system within Pocket Comman
 2.  **`TerminalOutputHandler`** ([`pocket_commander/commands/terminal_io.py`](pocket_commander/commands/terminal_io.py:1) or [`pocket_commander/commands/io.py`](pocket_commander/commands/io.py:1)):
     *   Subclass of `AbstractOutputHandler`. Uses `TerminalApp.display_output()`.
 
-### Phase 4: Integration into `TerminalApp` and Modes
+### Phase 4: Integration into `TerminalApp` and Agents
 
 1.  **Modify `TerminalApp`** ([`pocket_commander/terminal_interface.py`](pocket_commander/terminal_interface.py:1)):
     *   Ensure `TerminalOutputHandler` is correctly instantiated and made available to `CommandContext`.
-2.  **Modify Mode Flows** (e.g., [`pocket_commander/modes/main/main_flow.py`](pocket_commander/modes/main/main_flow.py:1)):
+2.  **Modify Agent Flows** (e.g., [`pocket_commander/agents/main/main_agent_logic.py`](pocket_commander/agents/main/main_agent_logic.py:1)):
     *   Implement `_discover_commands()` method.
     *   Update `handle_input` to include command dispatch logic.
     *   Example of command registration in `__init__`:
         ```python
-        # Example in a mode flow class
+        # Example in an agent flow class
         import inspect
         # ...
-        def __init__(self, mode_config, terminal_app_instance):
+        def __init__(self, agent_config, terminal_app_instance):
             # ... existing init ...
             self._commands = self._discover_commands()
 
@@ -82,9 +82,9 @@ To implement a robust and flexible command execution system within Pocket Comman
 
 ### Phase 5: Example & Documentation
 
-1.  **Update `MainModeFlow` with an Example Command:**
+1.  **Update `MainAgentFlow` with an Example Command:**
     ```python
-    # In MainModeFlow class
+    # In MainAgentFlow class
     from pocket_commander.commands.decorators import command
     from pocket_commander.commands.core import CommandContext
 
@@ -105,7 +105,7 @@ To implement a robust and flexible command execution system within Pocket Comman
         raw_args_str = ctx.input.raw_input # This would be the part after the command word
         name_arg = raw_args_str.strip() if raw_args_str.strip() else "User"
         
-        await ctx.output.send_message(f"Hello, {name_arg} from Main Mode!")
+        await ctx.output.send_message(f"Hello, {name_arg} from Main Agent!")
     ```
 2.  **Documentation:**
     *   This file (`docs/command_system_plan.md`) serves as the primary plan.
@@ -118,8 +118,8 @@ To implement a robust and flexible command execution system within Pocket Comman
 ```mermaid
 graph TD
     User --> TerminalApp
-    TerminalApp --> ModeFlow
-    ModeFlow --> CommandDispatcher
+    TerminalApp --> AgentFlow
+    AgentFlow --> CommandDispatcher
     CommandDispatcher --> CommandFunction
     CommandFunction --> CommandContext
     CommandContext --> AbstractInput
@@ -129,9 +129,9 @@ graph TD
         TerminalApp
     end
 
-    subgraph "pocket_commander.modes.your_mode"
-        ModeFlow
-        CommandDispatcher["Command Dispatcher (in ModeFlow)"]
+    subgraph "pocket_commander.agents.your_agent"
+        AgentFlow
+        CommandDispatcher["Command Dispatcher (in AgentFlow)"]
         CommandFunction["@command def my_cmd(ctx)"]
     end
 
@@ -155,8 +155,8 @@ graph TD
     TerminalCommandInput -- implements --> AbstractInput
     TerminalOutputHandler -- implements --> AbstractOutputHandler
     TerminalApp -- creates/provides --> TerminalOutputHandler
-    ModeFlow -- creates --> TerminalCommandInput
-    ModeFlow -- creates --> CommandContext
+    AgentFlow -- creates --> TerminalCommandInput
+    AgentFlow -- creates --> CommandContext
 ```
 
 ### Input Handling Flow (Bare Word Command)
@@ -165,7 +165,7 @@ graph TD
 sequenceDiagram
     participant User
     participant TA as TerminalApp
-    participant MF as ModeFlow
+    participant MF as AgentFlow
     participant CD as CommandDispatcher (in MF)
     participant CCtx as CommandContext
     participant CmdFunc as CommandFunction

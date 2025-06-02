@@ -1,9 +1,12 @@
 import yaml
 import logging
-from typing import Dict, Any, List, Type
+import os # Added for path operations if needed
+from typing import Dict, Any, List, Type, Optional
 
-from pocket_commander.tools.registry import global_tool_registry
+from pocket_commander.tools.registry import ToolRegistry # Keep for MCP tools
 from pocket_commander.tools.definition import ToolParameterDefinition
+from pocket_commander.types import AgentConfig # This is the new AgentConfig
+from pocket_commander.agent_resolver import AgentResolver # Added
 
 logger = logging.getLogger(__name__)
 
@@ -13,32 +16,104 @@ YAML_TO_PYTHON_TYPE_MAP: Dict[str, Type[Any]] = {
     "integer": int,
     "number": float,  # JSON schema "number" can be float or int, defaulting to float
     "boolean": bool,
-    "array": list,    # For simplicity, not handling item types within arrays from YAML yet
-    "object": dict,   # For simplicity, not handling specific object schemas from YAML yet
+    "array": list,
+    "object": dict,
 }
 
 def get_python_type_from_yaml_str(type_str: str) -> Type[Any]:
     """Converts a YAML type string to a Python type."""
     return YAML_TO_PYTHON_TYPE_MAP.get(type_str.lower(), str) # Default to str if unknown
 
-def load_and_register_mcp_tools_from_config(config_path: str = "pocket_commander.conf.yaml"):
+def load_and_resolve_app_config(config_path: str = "pocket_commander.conf.yaml") -> Optional[Dict[str, Any]]:
     """
-    Loads MCP tool configurations from the specified YAML file and registers them.
+    Loads the main application configuration from the specified YAML file,
+    resolves agent configurations, and returns the augmented config data.
     """
     try:
+        # Determine project root - assuming config_path is relative to where the app runs,
+        # or it's an absolute path. For simplicity, let's assume the CWD is project root
+        # or paths in YAML are Python module paths.
+        project_root = os.getcwd() # This might need to be more robust depending on execution context
+
         with open(config_path, 'r') as f:
             config_data = yaml.safe_load(f)
+        if not isinstance(config_data, dict):
+            logger.error(f"Configuration file {config_path} did not load as a dictionary.")
+            return None
+
+        # Resolve agents after loading raw YAML
+        agent_resolver = AgentResolver()
+        parsed_agent_configs: Dict[str, AgentConfig] = {}
+        agents_yaml_section = config_data.get("agents", {})
+        
+        if not isinstance(agents_yaml_section, dict):
+            logger.error("'agents' section in configuration must be a dictionary. Skipping agent parsing.")
+        else:
+            discovery_folders_cfg = config_data.get("agent_discovery_folders") # This is for AgentResolver if it uses it
+            for agent_slug, agent_yaml_details in agents_yaml_section.items():
+                if not isinstance(agent_yaml_details, dict):
+                    logger.error(f"Configuration for agent '{agent_slug}' is not a dictionary. Skipping.")
+                    continue
+                
+                logger.debug(f"Attempting to resolve agent '{agent_slug}' with details: {agent_yaml_details}")
+                # AgentResolver expects 'path' in agent_yaml_details to be a Python module path.
+                # It also needs project_root if it were to construct module paths from relative file paths.
+                # For now, AgentResolver's current implementation assumes 'path' is directly importable.
+                resolved_config = agent_resolver.resolve_agent_config(
+                    slug=agent_slug,
+                    agent_yaml_config=agent_yaml_details,
+                    project_root=project_root, # Passed for context, though resolver primarily uses module paths
+                    discovery_folders=discovery_folders_cfg
+                )
+                if resolved_config:
+                    parsed_agent_configs[agent_slug] = resolved_config
+                else:
+                    logger.warning(f"Failed to resolve agent configuration for slug '{agent_slug}'. It will not be available.")
+        
+        # Store the resolved agent configurations back into the main config data
+        # This is what app_core.py will look for.
+        config_data['resolved_agents'] = parsed_agent_configs
+        logger.info(f"Successfully loaded and resolved {len(parsed_agent_configs)} agent(s).")
+        
+        return config_data
+
     except FileNotFoundError:
         logger.error(f"Configuration file not found: {config_path}")
-        return
+        return None
     except yaml.YAMLError as e:
         logger.error(f"Error parsing YAML configuration file {config_path}: {e}")
-        return
+        return None
     except Exception as e:
-        logger.error(f"An unexpected error occurred while reading {config_path}: {e}")
+        logger.error(f"An unexpected error occurred while loading/resolving config from {config_path}: {e}", exc_info=True)
+        return None
+
+
+# Old parse_agent_configs is effectively replaced by the logic within load_and_resolve_app_config
+# If we want to keep it separate:
+# def parse_and_resolve_agent_configs(
+#     agents_yaml_section: Dict[str, Any],
+#     discovery_folders_cfg: Optional[List[str]],
+#     project_root: str
+# ) -> Dict[str, AgentConfig]:
+#     parsed_agents: Dict[str, AgentConfig] = {}
+#     agent_resolver = AgentResolver()
+#     # ... loop and resolve logic from above ...
+#     return parsed_agents
+
+
+def load_and_register_mcp_tools_from_config(raw_config: Optional[Dict[str, Any]], registry: ToolRegistry):
+    """
+    Loads MCP tool configurations from the provided config data and registers them.
+    Args:
+        raw_config: The loaded application configuration dictionary.
+                     If None, the function will log an error and return.
+        registry: The ToolRegistry instance to register tools into.
+    """
+    if raw_config is None:
+        logger.error("Cannot load MCP tools because application configuration data is None.")
         return
 
-    mcp_tools_config = config_data.get("mcp_tools")
+    mcp_tools_config = raw_config.get("mcp_tools")
     if not mcp_tools_config:
         logger.info("No 'mcp_tools' section found in configuration or it's empty.")
         return
@@ -72,7 +147,7 @@ def load_and_register_mcp_tools_from_config(config_path: str = "pocket_commander
             continue
 
         parsed_parameters: List[ToolParameterDefinition] = []
-        if parameters_config: # parameters_config can be None or empty list
+        if parameters_config:
             for param_conf in parameters_config:
                 if not isinstance(param_conf, dict):
                     logger.warning(f"Skipping invalid parameter configuration (not a dictionary) for tool {tool_name}: {param_conf}")
@@ -80,7 +155,7 @@ def load_and_register_mcp_tools_from_config(config_path: str = "pocket_commander
                 
                 param_name = param_conf.get("name")
                 param_desc = param_conf.get("description")
-                param_type_str = param_conf.get("type", "string") # Default to string if not specified
+                param_type_str = param_conf.get("type", "string")
                 param_is_required = param_conf.get("required", False)
                 param_default_value = param_conf.get("default")
 
@@ -97,39 +172,65 @@ def load_and_register_mcp_tools_from_config(config_path: str = "pocket_commander
                         name=param_name,
                         description=param_desc,
                         param_type=actual_param_type,
-                        type_str=param_type_str.lower(), # Store the original YAML type string
+                        type_str=param_type_str.lower(),
                         is_required=param_is_required,
                         default_value=param_default_value
                     )
                 )
         
         try:
-            global_tool_registry.register_mcp_tool(
+            registry.register_mcp_tool(
                 mcp_server_name=server_name,
                 mcp_tool_name=tool_name,
                 mcp_tool_description=description,
                 mcp_tool_parameters=parsed_parameters,
-                allow_override=True # Allow overriding if config is reloaded, or for dev
+                allow_override=True # Consider if override should be configurable
             )
-            # Logger message is already in register_mcp_tool
         except Exception as e:
             logger.error(f"Error registering MCP tool '{tool_name}' from server '{server_name}': {e}", exc_info=True)
 
     logger.info("Finished processing MCP tool configurations.")
 
 if __name__ == '__main__':
-    # Basic test for the loader
-    logging.basicConfig(level=logging.INFO)
-    logger.info("Testing MCP tool loading from pocket_commander.conf.yaml...")
-    # Create a dummy conf for testing if it doesn't exist or to ensure specific content
-    # For a real test, you'd mock open() or use a temporary file.
-    # This assumes pocket_commander.conf.yaml is in the current directory or accessible.
-    load_and_register_mcp_tools_from_config()
+    logging.basicConfig(level=logging.DEBUG) # Changed to DEBUG for more verbose test output
     
-    logger.info("Registered tools in global_tool_registry after loading:")
-    if not global_tool_registry.list_tools():
-        logger.info("  No tools registered.")
-    for tool_def in global_tool_registry.list_tools():
-        logger.info(f"  - Name: {tool_def.name}, Description: {tool_def.description}")
-        for param in tool_def.parameters:
-            logger.info(f"    - Param: {param.name} ({param.type_str}), Required: {param.is_required}, Default: {param.default_value}")
+    logger.info("Testing application configuration loading and agent parsing...")
+    # Use the new unified loading and resolving function
+    app_conf = load_and_resolve_app_config() # Assumes pocket_commander.conf.yaml exists and is structured per new plan
+    
+    if app_conf:
+        logger.info("Application configuration loaded and agents (attempted) resolved successfully.")
+        
+        resolved_agents_map = app_conf.get('resolved_agents', {})
+        if resolved_agents_map:
+            logger.info(f"Found {len(resolved_agents_map)} resolved agent configuration(s):")
+            for slug, agent_conf_obj in resolved_agents_map.items():
+                logger.info(f"  Agent Slug: {slug}")
+                logger.info(f"    Description: {agent_conf_obj.description}")
+                logger.info(f"    Path (Module): {agent_conf_obj.path}")
+                target_type = "Class" if agent_conf_obj.is_class_target else "Function"
+                target_name = agent_conf_obj.target_class.__name__ if agent_conf_obj.target_class else agent_conf_obj.target_composition_function.__name__
+                logger.info(f"    Target Type: {target_type}")
+                logger.info(f"    Target Name: {target_name}")
+                logger.info(f"    Init Args: {agent_conf_obj.init_args}")
+                # logger.info(f"    Raw Config: {agent_conf_obj.raw_config}") # Can be verbose
+        else:
+            logger.info("No agents resolved or 'agents' section was empty/invalid in config.")
+
+        # Test MCP tool loading (uses the same app_conf)
+        from pocket_commander.tools.registry import ToolRegistry as TestToolRegistry 
+        test_registry = TestToolRegistry()
+        logger.info("\nTesting MCP tool loading from pocket_commander.conf.yaml into a test_registry...")
+        load_and_register_mcp_tools_from_config(app_conf, test_registry)
+        
+        logger.info("\nRegistered tools in test_registry after loading:")
+        if not test_registry.list_tools():
+            logger.info("  No tools registered in test_registry.")
+        for tool_def in test_registry.list_tools():
+            logger.info(f"  - Name: {tool_def.name}, Description: {tool_def.description}, Type: {'MCP' if tool_def.is_mcp_tool else 'Native'}")
+            if tool_def.is_mcp_tool:
+                logger.info(f"    MCP Server: {tool_def.mcp_server_name}, MCP Tool: {tool_def.mcp_tool_name}")
+            # for param in tool_def.parameters:
+            #     logger.info(f"    - Param: {param.name} ({param.type_str}), Required: {param.is_required}, Default: {param.default_value}")
+    else:
+        logger.error("Failed to load application configuration. Cannot proceed with further tests.")

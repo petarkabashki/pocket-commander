@@ -16,6 +16,7 @@ from .definition import ToolDefinition, ToolParameterDefinition
 # from . import web_tools # Assuming web_tools.py will contain @tool decorated functions
 from . import weather_tool # For get_current_weather
 from . import stock_tool # For get_stock_price
+from . import fetch_tool # For fetch
 
 # Optionally, you could also initiate scanning of plugin directories here if desired,
 # though it might be better to do that explicitly at application startup.

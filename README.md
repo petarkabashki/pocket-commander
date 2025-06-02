@@ -15,7 +15,7 @@ Pocket Commander is an extendable agentic AI workflow engine, built upon the **P
 *   **Modular Tool-Based Architecture:** Extensible functionality through a system of easily integrated tools.
 *   **Asynchronous Operations:** Built with `asyncio` for efficient, non-blocking task execution, crucial for responsive AI agents.
 *   **Interactive Terminal Interface:** Provides a user-friendly command-line experience using `prompt-toolkit` and `rich` for development, testing, and interaction.
-*   **Configurable Modes:** Supports different operational modes, allowing for various agent configurations and behaviors.
+*   **Configurable Agents:** Supports different operational agents, allowing for various agent configurations and behaviors.
 *   **Workflow Management:** Utilizes PocketFlow to define, manage, and execute complex sequences of actions.
 
 ## Technologies Used
@@ -61,11 +61,11 @@ The project follows a modular structure, aligned with PocketFlow principles:
 *   `pocket_commander/nodes/`: Contains individual processing units (Nodes), the building blocks of PocketFlows.
 *   `pocket_commander/flows/`: Defines PocketFlows, which are sequences or graphs of interconnected Nodes orchestrating agent behavior.
 *   `pocket_commander/tools/`: Houses specific tools callable by agents within the workflows (e.g., `get_stock_price`).
-*   `pocket_commander/modes/`: Implements different operational modes for the terminal interface, each potentially running a distinct master Flow.
+*   `pocket_commander/agents/`: Implements different operational agents for the terminal interface, each potentially running a distinct master Flow.
 *   `pocket_commander/utils/`: Contains shared utility modules and helper functions.
 *   `pocket_commander/main.py`: Entry point for the application.
 *   `pocket_commander/terminal_interface.py`: Core logic for the interactive terminal.
-*   `pocket_commander.conf.yaml`: Configuration file for the application, including terminal modes and other settings.
+*   `pocket_commander.conf.yaml`: Configuration file for the application, including terminal agents and other settings.
 *   `cline_docs/`: Contains documentation for Cline, the AI assistant working on this project, detailing its understanding of Pocket Commander.
 
 ## Contributing

@@ -1,15 +1,15 @@
 # Project Plan: PocketFlow-Centric Application Architecture
 
-**Goal:** To refactor Pocket Commander into a fully PocketFlow-based architecture. This involves transforming the current `TerminalApp` into a `TerminalInteractionFlow`, introducing an `OverarchingAppFlow` to manage the application lifecycle and global commands, and ensuring all modes are also PocketFlows. The command system will use abstract I/O, making the terminal implementation replaceable.
+**Goal:** To refactor Pocket Commander into a fully PocketFlow-based architecture. This involves transforming the current `TerminalApp` into a `TerminalInteractionFlow`, introducing an `OverarchingAppFlow` to manage the application lifecycle and global commands, and ensuring all agents are also PocketFlows. The command system will use abstract I/O, making the terminal implementation replaceable.
 
 **Key Architectural Principles:**
 
-1.  **PocketFlow Core:** All major components (application shell, interaction layers, modes) will be implemented as PocketFlows or nodes within them.
+1.  **PocketFlow Core:** All major components (application shell, interaction layers, agents) will be implemented as PocketFlows or nodes within them.
 2.  **Clear Separation of Concerns:**
-    *   `OverarchingAppFlow`: Manages global state, application lifecycle, global commands, and orchestrates interaction and mode flows.
+    *   `OverarchingAppFlow`: Manages global state, application lifecycle, global commands, and orchestrates interaction and agent flows.
     *   `TerminalInteractionFlow` (and other potential InteractionFlows): Handles the specifics of user I/O for a given interface (e.g., terminal, web).
-    *   `ModeFlows`: Encapsulate specific functionalities or agent behaviors, with their own local commands.
-3.  **Abstracted I/O:** The command system (both global and mode-specific) will rely on `AbstractCommandInput` and `AbstractOutputHandler` as defined in `docs/command_system_plan.md`, allowing for different I/O backends.
+    *   `AgentFlows`: Encapsulate specific functionalities or agent behaviors, with their own local commands.
+3.  **Abstracted I/O:** The command system (both global and agent-specific) will rely on `AbstractCommandInput` and `AbstractOutputHandler` as defined in `docs/command_system_plan.md`, allowing for different I/O backends.
 
 ---
 
@@ -18,17 +18,17 @@
 1.  **Define `OverarchingAppFlow` (`pocket_commander/flows/app_flow.py` - new file):**
     *   **Responsibilities:**
         *   Initialize and manage the application lifecycle.
-        *   Load and manage configurations (modes, global settings).
+        *   Load and manage configurations (agents, global settings).
         *   Instantiate and manage the active `InteractionFlow` (e.g., `TerminalInteractionFlow`).
-        *   Instantiate, manage, and switch active `ModeFlows`.
+        *   Instantiate, manage, and switch active `AgentFlows`.
         *   Register and dispatch global commands.
-        *   Maintain global application state (e.g., current mode name).
+        *   Maintain global application state (e.g., current agent name).
     *   **Key Nodes (Conceptual):**
         *   `ConfigLoaderNode`: Loads `pocket_commander.conf.yaml`.
         *   `InteractionFlowManagerNode`: Instantiates and runs the chosen `InteractionFlow`.
-        *   `ModeManagerNode`: Loads, switches, and manages `ModeFlows`.
+        *   `AgentManagerNode`: Loads, switches, and manages `AgentFlows`.
         *   `GlobalCommandRegistryNode`: Holds global command definitions.
-        *   `InputRouterNode`: Receives input from `InteractionFlow` and routes it to global command dispatcher or `ModeManagerNode`.
+        *   `InputRouterNode`: Receives input from `InteractionFlow` and routes it to global command dispatcher or `AgentManagerNode`.
 
 2.  **Define `TerminalInteractionFlow` (`pocket_commander/flows/terminal_interaction_flow.py` - new file, refactoring from `pocket_commander/terminal_interface.py`):**
     *   **Responsibilities:**
@@ -55,10 +55,10 @@
 1.  **Deconstruct `TerminalApp` (`pocket_commander/terminal_interface.py`):**
     *   The `TerminalApp` class will be largely dismantled or significantly simplified.
     *   `load_config()`: Logic moves to `OverarchingAppFlow`'s `ConfigLoaderNode`.
-    *   `set_initial_mode()`: Logic moves to `OverarchingAppFlow`'s `ModeManagerNode` (called after config loading).
-    *   `switch_mode()`: Logic moves to `OverarchingAppFlow`'s `ModeManagerNode`.
+    *   `set_initial_agent()`: Logic moves to `OverarchingAppFlow`'s `AgentManagerNode` (called after config loading).
+    *   `switch_agent()`: Logic moves to `OverarchingAppFlow`'s `AgentManagerNode`.
     *   `display_output()`: Logic moves to `TerminalOutputHandler` / `TerminalInteractionFlow`'s `TerminalOutputNode`.
-    *   `handle_builtin_command()`: This logic will be split. Global commands (like `/mode`, `/modes`, `/help`) will be handled by `OverarchingAppFlow`.
+    *   `handle_builtin_command()`: This logic will be split. Global commands (like `/agent`, `/agents`, `/help`) will be handled by `OverarchingAppFlow`.
     *   `run()`: The main loop logic is replaced by the execution of `OverarchingAppFlow` which in turn runs `TerminalInteractionFlow`.
 
 2.  **Entry Point (`pocket_commander/main.py`):**
@@ -70,36 +70,36 @@
 ### Phase 3: Integrating the Command System
 
 1.  **Global Command Handling (in `OverarchingAppFlow`):**
-    *   `OverarchingAppFlow` will have its own command registry (similar to mode flow's registry in `docs/command_system_plan.md`).
-    *   Commands like `/exit`, `/help`, `/modes`, `/mode <name>` will be defined as global commands (e.g., methods in `OverarchingAppFlow` decorated with `@command`).
+    *   `OverarchingAppFlow` will have its own command registry (similar to agent flow's registry in `docs/command_system_plan.md`).
+    *   Commands like `/exit`, `/help`, `/agents`, `/agent <name>` will be defined as global commands (e.g., methods in `OverarchingAppFlow` decorated with `@command`).
     *   The `InputRouterNode` in `OverarchingAppFlow` will:
         *   Receive input from `TerminalInteractionFlow`.
         *   Attempt to parse and dispatch it as a global command.
-        *   If not a global command, pass it to the `ModeManagerNode` for the active `ModeFlow`.
+        *   If not a global command, pass it to the `AgentManagerNode` for the active `AgentFlow`.
     *   `CommandContext` for global commands will be created by `OverarchingAppFlow`, providing the active `TerminalCommandInput` and `TerminalOutputHandler` (sourced from/via `TerminalInteractionFlow`).
 
-2.  **Mode-Specific Command Handling:**
+2.  **Agent-Specific Command Handling:**
     *   Remains largely as per `docs/command_system_plan.md`.
-    *   `ModeFlows` will register and dispatch their local commands.
-    *   `CommandContext` for mode commands will be created by the `ModeFlow`, also using the active I/O handlers.
+    *   `AgentFlows` will register and dispatch their local commands.
+    *   `CommandContext` for agent commands will be created by the `AgentFlow`, also using the active I/O handlers.
 
 3.  **Command Completer Update:**
     *   The `WordCompleter` in `TerminalInteractionFlow` will need to be dynamically updated with:
         *   Global command names (from `OverarchingAppFlow`).
-        *   Active mode's command names (from the current `ModeFlow`).
-        *   Mode names (for the `/mode` command).
+        *   Active agent's command names (from the current `AgentFlow`).
+        *   Agent names (for the `/agent` command).
 
 ---
 
-### Phase 4: Mode Integration as PocketFlows
+### Phase 4: Agent Integration as PocketFlows
 
-1.  **Mode Definition:**
-    *   Each mode (e.g., `main`, `composer`) will be a self-contained PocketFlow.
-    *   The `get_flow(mode_config, app_instance)` signature in mode `__init__.py` files will change. `app_instance` might become `overarching_app_flow_instance` or it might receive specific delegates/interfaces for interaction (like access to I/O handlers or a way to request mode switches).
+1.  **Agent Definition:**
+    *   Each agent (e.g., `main`, `composer`) will be a self-contained PocketFlow.
+    *   The `get_flow(agent_config, app_instance)` signature in agent `__init__.py` files will change. `app_instance` might become `overarching_app_flow_instance` or it might receive specific delegates/interfaces for interaction (like access to I/O handlers or a way to request agent switches).
 
-2.  **Mode Loading and Switching (in `OverarchingAppFlow`'s `ModeManagerNode`):**
-    *   Uses the configuration to discover and instantiate `ModeFlows`.
-    *   Handles teardown of the old mode flow and setup of the new one during a switch.
+2.  **Agent Loading and Switching (in `OverarchingAppFlow`'s `AgentManagerNode`):**
+    *   Uses the configuration to discover and instantiate `AgentFlows`.
+    *   Handles teardown of the old agent flow and setup of the new one during a switch.
 
 ---
 
@@ -112,12 +112,12 @@ graph TD
     UserInterface["User (e.g., Terminal)"] --> InteractionFlow["InteractionFlow (e.g., TerminalInteractionFlow)"]
     InteractionFlow -- Input --> OverarchingAppFlow["OverarchingAppFlow"]
     OverarchingAppFlow -- Output --> InteractionFlow
-    OverarchingAppFlow -- Manages/RoutesTo --> ActiveModeFlow["Active ModeFlow"]
-    ActiveModeFlow -- Output --> InteractionFlow
+    OverarchingAppFlow -- Manages/RoutesTo --> ActiveAgentFlow["Active AgentFlow"]
+    ActiveAgentFlow -- Output --> InteractionFlow
 
     subgraph "Application Core (PocketFlows)"
         OverarchingAppFlow
-        ActiveModeFlow
+        ActiveAgentFlow
     end
 
     subgraph "I/O Layer (PocketFlows)"
@@ -132,13 +132,13 @@ graph TD
     end
 
     OverarchingAppFlow -- Uses --> CommandContext
-    ActiveModeFlow -- Uses --> CommandContext
+    ActiveAgentFlow -- Uses --> CommandContext
     InteractionFlow -- Creates/Provides --> AbstractInputCommand
     InteractionFlow -- ConsumesForOutput --> AbstractOutputHandler
 
     style OverarchingAppFlow fill:#f9f,stroke:#333,stroke-width:2px
     style InteractionFlow fill:#ccf,stroke:#333,stroke-width:2px
-    style ActiveModeFlow fill:#9cf,stroke:#333,stroke-width:2px
+    style ActiveAgentFlow fill:#9cf,stroke:#333,stroke-width:2px
 ```
 
 #### Command Dispatch Flow (Simplified)
@@ -148,9 +148,9 @@ sequenceDiagram
     participant User
     participant TIF as TerminalInteractionFlow
     participant OAF as OverarchingAppFlow
-    participant AMF as ActiveModeFlow
+    participant AMF as ActiveAgentFlow
     participant GlobalCmd as GlobalCommand
-    participant ModeCmd as ModeCommand
+    participant AgentCmd as AgentCommand
     participant CCtx as CommandContext
     participant CIO as AbstractCommandInput
     participant CHO as AbstractOutputHandler
@@ -168,14 +168,14 @@ sequenceDiagram
         GlobalCmd-->>-OAF: Done
     else Not a Global Command
         OAF->>+AMF: handle_input(raw_text, CIO_instance)
-        AMF->>AMF: Try dispatch as Mode Command
-        alt Mode Command Found
+        AMF->>AMF: Try dispatch as Agent Command
+        alt Agent Command Found
             AMF->>AMF: Create CCtx (with CIO, CHO from TIF)
-            AMF->>+ModeCmd: execute(CCtx)
-            ModeCmd->>CHO: send_message("Mode response")
-            CHO->>TIF: display("Mode response")
-            ModeCmd-->>-AMF: Done
-        else Command Not Found in Mode
+            AMF->>+AgentCmd: execute(CCtx)
+            AgentCmd->>CHO: send_message("Agent response")
+            CHO->>TIF: display("Agent response")
+            AgentCmd-->>-AMF: Done
+        else Command Not Found in Agent
             AMF->>CHO: send_message("Unknown command")
             CHO->>TIF: display("Unknown command")
         end
@@ -193,7 +193,7 @@ sequenceDiagram
 2.  **Implement I/O Abstraction:** Ensure `TerminalCommandInput` and `TerminalOutputHandler` are robust and integrate with `TerminalInteractionFlow`.
 3.  **Migrate Config Loading & Basic Terminal Loop:** Move this from `TerminalApp` to the new flows.
 4.  **Implement Global Command Dispatch:** In `OverarchingAppFlow`.
-5.  **Refactor Mode Loading/Switching:** In `OverarchingAppFlow`.
+5.  **Refactor Agent Loading/Switching:** In `OverarchingAppFlow`.
 6.  **Update `main.py`:** To launch the new `OverarchingAppFlow`.
 7.  **Test Thoroughly:** At each step, especially I/O and command dispatch.
 8.  **Documentation:** Update `cline_docs/` (`systemPatterns.md`, `techContext.md`) to reflect the new architecture.

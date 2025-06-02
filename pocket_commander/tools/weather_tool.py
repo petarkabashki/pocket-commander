@@ -73,7 +73,7 @@ async def get_weather(location: str) -> str:
                 77: "Snow grains",
                 80: "Slight rain showers", 81: "Moderate rain showers", 82: "Violent rain showers",
                 85: "Slight snow showers", 86: "Heavy snow showers",
-                95: "Thunderstorm: Slight or moderate",
+                95: "Thunderstorm: Slight or agentrate",
                 96: "Thunderstorm with slight hail", 99: "Thunderstorm with heavy hail"
             }
             weather_description = weather_description_map.get(weather_code, f"Weather code {weather_code}")

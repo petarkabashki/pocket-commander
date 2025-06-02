@@ -1,26 +1,20 @@
 # Active Context
 
 ## What you're working on now
-The primary task is the **implementation of Plan v8.3: Fully Functional Composition for Application Core and Modes**. This involves a significant architectural refactor to:
-- Define core I/O abstractions (`AbstractCommandInput`, `AbstractOutputHandler`, `PromptFunc`).
-- Implement `CommandDefinition` and `CommandContext` data structures.
-- Create an `AppServices` container.
-- Develop mode composition functions that return a mode-specific input handler and command definitions.
-- Build the `create_application_core` function to compose the main application logic, manage state via closures, and handle global commands and mode switching.
-- Update `TerminalInteractionFlow` to use the new `top_level_app_input_handler` returned by `create_application_core`.
-- Refactor `main.py` to initialize and connect these components.
+Phase 9 (Update Documentation) is complete.
+Phase 10 (Thorough Testing) is now the active task.
 
 ## Recent changes
-- **Architectural Planning Completed:** Plan v8.3, detailing a fully functional composition model, was finalized and documented in `docs/plan_v8.1_functional_mode_composition.md`.
-- **Mode Switch:** Switched from "Architect" mode to "Code" mode to begin implementation.
-- **Memory Bank Initialization:** All Memory Bank files (`productContext.md`, `activeContext.md`, `systemPatterns.md`, `techContext.md`, `progress.md`) were read to establish full context.
+- **Phase 9 (Update Documentation) Complete:** All relevant `cline_docs` and user documentation have been updated to reflect the completion of the Agent System Refactor (Phase 8).
+- **Phase 8 (Refactor Existing Agents: `main`, `composer`, `tool-agent`) Complete:** The refactoring of the core agents to align with the new event-driven, PocketFlow-based architecture is finished.
+- **New Agent System Implemented:**
+    - Agents are now discoverable PocketFlow Nodes or Flows.
+    - YAML-based configuration for agents is in place ([`pocket_commander.conf.yaml`](pocket_commander.conf.yaml:1)).
+    - A Pub/Sub event mechanism using `AsyncEventBus` ([`pocket_commander/event_bus.py`](pocket_commander/event_bus.py:1)) handles agent and application communication.
+    - Core event types (`AppInputEvent`, `AgentOutputEvent`, `AgentLifecycleEvent`) are defined in [`pocket_commander/events.py`](pocket_commander/events.py:1).
+    - `AgentConfig` ([`pocket_commander/types.py`](pocket_commander/types.py:1)) defines agent structure.
+    - `AgentResolver` ([`pocket_commander/agent_resolver.py`](pocket_commander/agent_resolver.py:1)) handles agent discovery and loading.
+- **Memory Bank Initialization:** All Memory Bank files (`productContext.md`, `activeContext.md`, `systemPatterns.md`, `techContext.md`, `progress.md`) were read to establish full context for the documentation update task.
 
 ## Next steps
-1.  **Update `cline_docs/progress.md`** to reflect the commencement of Plan v8.3 implementation.
-2.  **Begin Phase 1 of Plan v8.3 Implementation:** Define Core Data Structures and I/O Abstractions.
-    *   `AbstractCommandInput`, `AbstractOutputHandler`, `PromptFunc` in `pocket_commander/commands/io.py`.
-    *   `ParameterDefinition`, `CommandDefinition` in `pocket_commander/commands/definition.py`.
-    *   `CommandContext` in `pocket_commander/commands/core.py`.
-    *   `AppServices` in `pocket_commander/types.py`.
-3.  Proceed through subsequent phases of Plan v8.3 implementation as documented.
-4.  After implementation, update `cline_docs/systemPatterns.md` and `cline_docs/techContext.md` to reflect the new architecture.
+1.  **Phase 10: Thorough Testing:** Verify agent discovery, event flows, input handling, tool integration (placeholder), YAML configurations, and dedicated input requests.

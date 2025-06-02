@@ -27,27 +27,27 @@ class CommandDefinition(BaseModel):
     """
     Defines a command, including its metadata, function, and parameters.
     """
-    name: str = Field(..., description="The primary name of the command (e.g., 'help', 'mode').")
+    name: str = Field(..., description="The primary name of the command (e.g., 'help', 'agent').")
     command_function: Callable[[CommandContext], Awaitable[Any]] = Field(
         ..., description="The asynchronous function to execute for this command."
     )
     description: Optional[str] = Field(None, description="A user-friendly description of what the command does.")
     parameters: List[ParameterDefinition] = Field(default_factory=list, description="A list of parameter definitions for the command.")
     aliases: List[str] = Field(default_factory=list, description="Alternative names for the command.")
-    category: Optional[str] = Field("General", description="Category for grouping commands (e.g., 'File Operations', 'Mode Management').")
+    category: Optional[str] = Field("General", description="Category for grouping commands (e.g., 'File Operations', 'Agent Management').")
 
     class Config:
         arbitrary_types_allowed = True
 
 # Example Usage (for illustration, not part of the actual file content for definition.py)
 # async def example_command_func(ctx: CommandContext):
-#     await ctx.output.send_message(f"Example command executed in mode: {ctx.mode_name}")
+#     await ctx.output.send_message(f"Example command executed in agent: {ctx.agent_name}")
 
-# example_param = ParameterDefinition(name="target_mode", param_type=str, description="The mode to switch to.")
+# example_param = ParameterDefinition(name="target_agent", param_type=str, description="The agent to switch to.")
 # example_command = CommandDefinition(
-#     name="mode",
+#     name="agent",
 #     command_function=example_command_func, # Replace with actual async function
-#     description="Switches to a specified mode.",
+#     description="Switches to a specified agent.",
 #     parameters=[example_param],
-#     aliases=["m", "switch_mode"]
+#     aliases=["m", "switch_agent"]
 # )

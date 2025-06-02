@@ -16,8 +16,12 @@ llm-profiles:
 
 # Application core settings
 application:
-  default_mode: main # Specifies the mode to load on startup
+  default_agent: main # Specifies the agent to load on startup
   # ... other app settings
+
+agent_discovery_folders:
+  - pocket_commander/core_agents # Example: for built-in agents
+  # - custom_agents # Example: for user-defined agents outside the main package
 
 logging:
   level: INFO  # Default global log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -29,33 +33,42 @@ logging:
   #   pocket_commander.app_core: DEBUG
   #   some_other_module: WARNING
 
-modes: # Renamed from 'modes' in app_core.py's application_state for clarity
-  main:
-    name: main # Explicit name, matches the key
-    module: pocket_commander.modes.main # Path to the package/module exporting the composition function
-    # composition_function: create_main_mode_logic # Optional: app_core infers this
-    description: "Default interaction mode."
-    llm_profile: dev
-    # Mode-specific configuration, accessible in the mode's composition function
-    default_greet_name: "Valued User from Config"
+agents:
+  main: # This is the agent slug
+    description: "Default interaction agent. Handles general queries."
+    path: pocket_commander.core_agents.main_agent
+    class_name: MainDefaultAgent
+    init_args:
+      slug: main
+      default_greet_name: "Valued User from Main Agent"
 
   composer:
-    name: composer
-    module: pocket_commander.modes.composer # TODO: Refactor this mode
-    # composition_function: create_composer_mode_logic # TODO: Implement
-    description: "Mode for composing complex prompts or documents."
-    llm_profile: anthro
-    # Example specific config for composer mode
-    style_guide: "formal"
+    description: "Agent for composing complex prompts or documents."
+    path: pocket_commander.core_agents.composer_agent # Corrected path
+    class_name: ComposerAgent # Specified class name
+    init_args:
+      slug: composer # Added slug
+      llm_profile: anthro
+      style_guide: "formal"
+      # tool_names: [] # Example: if composer agent needs no tools explicitly
 
   tool-agent:
-    name: tool-agent
-    module: pocket_commander.modes.tool_agent # TODO: Refactor this mode
-    # composition_function: create_tool_agent_mode_logic # TODO: Implement
-    description: "Interactive tool-enabled agent for complex tasks."
-    llm_profile: default
-    initial_context: "You are a helpful and resourceful AI assistant, ready to use tools."
-    # Other tool-agent specific configs can go here
+    description: "Agent specialized in using tools."
+    path: pocket_commander.core_agents.tool_agent # Module path
+    class_name: ToolAgent # Your implemented class name
+    init_args:
+      slug: tool-agent
+      llm_profile: default
+      tool_names: ["greet_user", "show_time"] # Example/Placeholder tools
+
+  # Example of a flow-based agent using a composition function
+  # complex_flow_agent:
+  #   description: "An agent defined by a flow composition function."
+  #   path: pocket_commander/custom_flows/complex_flow_logic.py
+  #   composition_function_name: create_complex_interaction_flow
+  #   init_args:
+  #     llm_profile: gemini
+  #     max_steps: 10
 
 mcp_tools:
   - server_name: "brave-search"

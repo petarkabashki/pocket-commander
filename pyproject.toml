@@ -8,7 +8,11 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pydantic (>=2.11.5,<3.0.0)"
+    "pydantic (>=2.11.5,<3.0.0)",
+    "mcp[cli] (>=1.9.2,<2.0.0)",
+    "markdownify (>=1.1.0,<2.0.0)",
+    "protego (>=0.4.0,<0.5.0)",
+    "readabilipy (>=0.3.0,<0.4.0)"
 ]
 
 [tool.poetry]
@@ -21,6 +25,12 @@ python = ">=3.12"
 rich = "*"
 prompt-toolkit = "*"
 PyYAML = "*"
+
+httpx = "*"
+
+
+
+
 [tool.poetry.scripts]
 main = "pocket_commander.main:main"
 

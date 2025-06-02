@@ -6,7 +6,7 @@ from pocket_commander.commands.core import CommandMetadata
 
 def command(name: str, description: str, aliases: Optional[List[str]] = None):
     """
-    Decorator to mark a method within a ModeFlow class as a command.
+    Decorator to mark a method within a AgentFlow class as a command.
 
     Args:
         name: The primary name of the command.
@@ -22,7 +22,7 @@ def command(name: str, description: str, aliases: Optional[List[str]] = None):
             raise TypeError(f"Command '{name}' function must be an async function (defined with 'async def').")
 
         # Attach metadata to the function object itself.
-        # This metadata will be discovered by the ModeFlow's command registry.
+        # This metadata will be discovered by the AgentFlow's command registry.
         setattr(func, '_command_metadata', CommandMetadata(
             name=name,
             func=func,
@@ -32,7 +32,7 @@ def command(name: str, description: str, aliases: Optional[List[str]] = None):
 
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            # The first argument to the method will be 'self' (the ModeFlow instance)
+            # The first argument to the method will be 'self' (the AgentFlow instance)
             # The second should be the CommandContext instance.
             # This wrapper primarily ensures the original function is called.
             # Type checking for CommandContext presence can be done at dispatch time.

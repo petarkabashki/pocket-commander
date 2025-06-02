@@ -1,4 +1,5 @@
-## Project gguidelines
+## Project guidelines
+
 
 - Always use 'conda activate py312' before running python in the terminal
 - Use '&&' instead of '&amp;&amp;' in terminal commands

@@ -17,5 +17,5 @@ Pocket Commander should:
 - **Utilize a flexible tool-based architecture**, allowing easy integration of new capabilities (e.g., data fetching, API interaction, custom logic).
 - **Operate asynchronously** for efficient handling of tasks.
 - **Provide an interactive terminal interface** for development, testing, and direct interaction with the agents and their workflows.
-- Be **configurable** through YAML files, allowing users to define modes of operation, toolsets, and agent behaviors.
+- Be **configurable** through YAML files, allowing users to define agents of operation, toolsets, and agent behaviors.
 - Serve as a **basis for implementing custom agentic automation tools**, meaning its architecture should be clear, modular, and easy to extend.

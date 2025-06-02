@@ -13,13 +13,13 @@ if TYPE_CHECKING:
 class CommandContext:
     """
     Context object passed to command functions, providing access to I/O,
-    application services, mode details, and other relevant information.
+    application services, agent details, and other relevant information.
     """
     input: 'AbstractCommandInput'
     output: 'AbstractOutputHandler'
     prompt_func: 'PromptFunc'
     app_services: 'AppServices' # Provides access to shared services like config, logger
-    mode_name: Optional[str] # Name of the mode in which the command is executed, if any
+    agent_name: Optional[str] # Name of the agent in which the command is executed, if any
     loop: asyncio.AbstractEventLoop
     parsed_args: dict[str, Any] # Arguments parsed by the argument parsing utility
 

@@ -3,3 +3,7 @@ yfinance
 requests
 pytz
 timezonefinder
+httpx
+markdownify
+readabilipy
+protego

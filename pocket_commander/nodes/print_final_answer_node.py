@@ -27,7 +27,7 @@ class PrintFinalAnswerNode(AsyncNode):
     async def exec_async(self, prep_res: dict):
         """
         Processes the final answer. If configured, prints directly via output_handler.
-        Otherwise, ensures the answer is ready for the mode to display.
+        Otherwise, ensures the answer is ready for the agent to display.
         """
         final_answer_to_process = prep_res["final_answer"]
         
@@ -35,9 +35,9 @@ class PrintFinalAnswerNode(AsyncNode):
             await self.output_handler.send_message(f"Agent: {final_answer_to_process}", style="bold green") # Changed to use output_handler.print_text
             logger.info(f"Printed final answer directly via output_handler: {final_answer_to_process}")
         else:
-            # If not printing directly, the mode is responsible for displaying shared_data['final_answer'].
+            # If not printing directly, the agent is responsible for displaying shared_data['final_answer'].
             # This node confirms the answer is processed.
-            logger.info(f"Final answer prepared for mode display: {final_answer_to_process}")
+            logger.info(f"Final answer prepared for agent display: {final_answer_to_process}")
             
         # await self.output_handler.send_message(final_answer_to_process, style="bold green") # Changed to use output_handler.send_message
 
@@ -56,7 +56,7 @@ class PrintFinalAnswerNode(AsyncNode):
         if self.prints_directly and self.output_handler: # Changed self.terminal_app to self.output_handler
             system_message_content += " (Displayed directly to terminal)"
         else:
-            system_message_content += " (Prepared for mode display)"
+            system_message_content += " (Prepared for agent display)"
             
         updated_messages.append({'role': 'system', 'content': system_message_content})
         
