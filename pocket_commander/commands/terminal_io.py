@@ -1,17 +1,18 @@
 #%%
 # pocket_commander/commands/terminal_io.py
-import asyncio # Added
-import uuid # Added
-import logging # Added
+import asyncio 
+import uuid 
+import logging 
 from typing import Any, Dict, Optional, Type, TypeVar, List
-from rich.console import Console
+from rich.console import Console # Keep for potential direct use, though TerminalAgUIClient has its own
 
-from pocket_commander.commands.io import AbstractCommandInput, AbstractOutputHandler
-from pocket_commander.event_bus import AsyncEventBus, BaseEvent # Added
-from pocket_commander.events import SystemMessageEvent, SystemMessageType # Added
-from pocket_commander.events import AgentOutputEvent # Added
+from pocket_commander.commands.io import AbstractCommandInput # AbstractOutputHandler removed
+from pocket_commander.event_bus import AsyncEventBus, BaseEvent 
+# SystemMessageEvent and AgentOutputEvent are less relevant for direct terminal output now
+# from pocket_commander.events import SystemMessageEvent, SystemMessageType 
+# from pocket_commander.events import AgentOutputEvent 
 
-logger = logging.getLogger(__name__) # Added
+logger = logging.getLogger(__name__) 
 
 T = TypeVar('T')
 
@@ -20,16 +21,11 @@ class TerminalCommandInput(AbstractCommandInput):
     Terminal-specific implementation of command input.
     Handles a full input string from the terminal.
     """
-    # This class currently does not handle prompting directly.
-    # Prompting logic (request_dedicated_input) is likely in TerminalInteractionFlow
-    # or similar, and will be modified there.
-
     def __init__(self, full_input_str: str):
-        # super().__init__(full_input_str) # AbstractCommandInput is a Protocol, no super init
-        self._raw_input_str = full_input_str # Store the full input string
+        self._raw_input_str = full_input_str 
         self._command_word: Optional[str] = None
-        self._args_str: str = "" # String after the command word
-        self._parsed_args: Optional[List[str]] = None # For simple space splitting of _args_str
+        self._args_str: str = "" 
+        self._parsed_args: Optional[List[str]] = None 
         self._parse_command_and_args_string()
 
     def _parse_command_and_args_string(self):
@@ -80,7 +76,7 @@ class TerminalCommandInput(AbstractCommandInput):
         """
         self._parse_args_list_if_needed()
         args_dict = {str(i): val for i, val in enumerate(self._parsed_args or [])}
-        args_dict["raw_string"] = self._args_str # The string after the command word
+        args_dict["raw_string"] = self._args_str 
         return args_dict
 
     def get_remaining_input(self) -> str:
@@ -89,96 +85,30 @@ class TerminalCommandInput(AbstractCommandInput):
         """
         return self._args_str
 
-
-class TerminalOutputHandler(AbstractOutputHandler):
+class StringCommandInput(TerminalCommandInput): # Added for clarity, used in app_core
     """
-    Terminal-specific implementation of command output.
-    Uses a Rich console instance to display messages.
-    Subscribes to AgentOutputEvent and SystemMessageEvent to display messages.
+    An alias or specific version of TerminalCommandInput initialized from a string,
+    primarily used for parsing argument strings for global commands internally.
     """
-    def __init__(self, console: Console, event_bus: AsyncEventBus):
-        self.console = console
-        self.event_bus = event_bus
-        self._subscription_task: Optional[asyncio.Task] = None
+    def __init__(self, args_string: str):
+        # For StringCommandInput, the "command word" is notional or empty,
+        # and the full args_string is treated as the arguments.
+        super().__init__(args_string)
+        # Override parsing if needed, or ensure TerminalCommandInput handles this correctly.
+        # If args_string is purely arguments, then _command_word might be empty
+        # and _args_str would be the full args_string.
+        # Let's adjust:
+        if " " not in args_string.strip(): # If it's a single word or empty
+            self._command_word = args_string.strip() # Treat as command if no spaces
+            self._args_str = ""
+        else: # If there are spaces, assume first word is notional command, rest is args
+              # This behavior is inherited from TerminalCommandInput, which is fine for parse_arguments
+              # as it operates on get_remaining_input() or similar.
+              # For StringCommandInput, we often want the *whole string* to be parsed as arguments.
+              # So, let's ensure _args_str is the full input string for parsing.
+            self._command_word = "" # No command word for pure arg string
+            self._args_str = args_string # The whole string is args
 
-    async def initialize(self):
-        """Subscribes to relevant events."""
-        logger.info("TerminalOutputHandler initializing and subscribing to events.") # Added log
-        await self.event_bus.subscribe(AgentOutputEvent, self._handle_agent_output_event) # type: ignore
-        await self.event_bus.subscribe(SystemMessageEvent, self._handle_system_message_event) # type: ignore
-        logger.info("TerminalOutputHandler subscriptions complete.") # Added log
 
-
-    async def _handle_agent_output_event(self, event: AgentOutputEvent):
-        logger.info(f"TerminalOutputHandler received AgentOutputEvent: '{event.message[:50]}...' Style: {event.style}") # Modified log
-        """Handles AgentOutputEvent by printing the message to the console."""
-        # This method is now the primary way agents send output to the terminal.
-        await self.send_message(event.message, style=event.style)
-
-    async def _handle_system_message_event(self, event: SystemMessageEvent):
-        logger.info(f"TerminalOutputHandler received SystemMessageEvent: Type: {event.message_type}, Msg: '{event.message[:50]}...'") # Added log
-        """Handles SystemMessageEvent by formatting and printing the message."""
-        from rich.text import Text # Local import
-
-        message_text = event.message
-        style = event.style # Use event's style if provided
-
-        if event.message_type == SystemMessageType.ERROR:
-            message_text = f"Error: {event.message}"
-            if not style: # Default error style if not overridden
-                style = "bold red"
-            if event.details:
-                message_text += f"\nDetails: {event.details}"
-        elif event.message_type == SystemMessageType.WARNING:
-            if not style: # Default warning style
-                style = "yellow"
-        elif event.message_type == SystemMessageType.SUCCESS:
-            if not style: # Default success style
-                style = "bold green"
-        # For INFO and RAW, use the message as is, and apply style if present
-
-        if style:
-            self.console.print(Text(str(message_text), style=style))
-        else:
-            self.console.print(str(message_text))
-
-    # These methods are now primarily for internal use by the handlers,
-    # or if some component *really* needs to bypass the event system (discouraged).
-    async def send_message(self, message: Any, style: Optional[str] = None):
-        from rich.text import Text # Local import
-        if style:
-            self.console.print(Text(str(message), style=style))
-        else:
-            self.console.print(str(message))
-
-    async def send_error(self, message: Any, details: Optional[str] = None, style: str = "bold red"):
-        # This method is effectively superseded by publishing a SystemMessageEvent with ERROR type.
-        # Keeping it for now in case of direct use, but should be deprecated.
-        full_message = f"Error: {message}"
-        if details:
-            full_message += f"\nDetails: {details}"
-        
-        from rich.text import Text
-        self.console.print(Text(full_message, style=style))
-
-    async def send_data(self, data: Any, format_hint: Optional[str] = None, style: Optional[str] = None):
-        from rich.text import Text
-        if format_hint == 'json':
-            import json
-            try:
-                self.console.print_json(json.dumps(data))
-                return
-            except TypeError: 
-                pass 
-        
-        if style:
-            self.console.print(Text(str(data), style=style))
-        else:
-             self.console.print(str(data))
-
-    async def close(self):
-        """Unsubscribe or clean up (if needed). For now, not strictly necessary."""
-        # If we had specific tasks tied to the handler, we might cancel them.
-        # Unsubscribing is not directly supported by this simple event bus,
-        # but not critical for shutdown if the bus itself stops.
-        pass
+# TerminalOutputHandler class has been removed as its functionality is
+# now covered by TerminalAgUIClient and the ag_ui event system.

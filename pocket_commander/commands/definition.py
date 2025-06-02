@@ -28,7 +28,7 @@ class CommandDefinition(BaseModel):
     Defines a command, including its metadata, function, and parameters.
     """
     name: str = Field(..., description="The primary name of the command (e.g., 'help', 'agent').")
-    command_function: Callable[[CommandContext], Awaitable[Any]] = Field(
+    handler: Callable[[CommandContext], Awaitable[Any]] = Field(
         ..., description="The asynchronous function to execute for this command."
     )
     description: Optional[str] = Field(None, description="A user-friendly description of what the command does.")

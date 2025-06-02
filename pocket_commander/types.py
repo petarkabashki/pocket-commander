@@ -114,15 +114,4 @@ class FlowStateEvent(Enum):
 
 FlowEventListener = Callable[[FlowStateEvent, str, Dict[str, Any]], Coroutine[Any, Any, None]]
 
-# %% For Tool System
-class ToolCallRequest(Protocol):
-    tool_name: str
-    arguments: Dict[str, Any]
-
-class ToolCallResult(Protocol):
-    tool_name: str
-    success: bool
-    result: Optional[Any] = None
-    error: Optional[str] = None
-    is_mcp_tool: bool = False
-    mcp_server_name: Optional[str] = None
+# ToolCallRequest and ToolCallResult are removed as they are superseded by ag_ui.types

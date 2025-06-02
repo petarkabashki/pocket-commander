@@ -1,88 +1,113 @@
-from typing import Optional, List, Literal, Any # Added Any for AbstractCommandInput placeholder if needed
-from pydantic import BaseModel, Field # Added Field
+from typing import Literal, Optional
+import uuid
+from pydantic import Field
 
 from pocket_commander.event_bus import BaseEvent
-# Assuming AbstractCommandInput is defined and importable from here:
-from pocket_commander.commands.io import AbstractCommandInput
-# CommandDefinition might not be needed directly in events if we are not sending them via events anymore.
-# If an event needed to carry command definitions, it would be imported from pocket_commander.commands.definition
+
+# Re-export all events from ag_ui.events for convenience.
+# This makes pocket_commander.events the central place to import events from,
+# whether they are ag_ui events or custom internal ones.
+from pocket_commander.ag_ui.events import (
+    EventType,
+    BaseEvent as AgUiBaseEvent, # Alias to avoid conflict with local BaseEvent
+    CustomEvent,
+    Event as AgUiEventUnion, # The main Annotated Union of all ag_ui events
+    MessagesSnapshotEvent,
+    RawEvent,
+    RunErrorEvent,
+    RunFinishedEvent,
+    RunStartedEvent,
+    StateDeltaEvent,
+    StateSnapshotEvent,
+    StepFinishedEvent,
+    StepStartedEvent,
+    TextMessageContentEvent,
+    TextMessageEndEvent,
+    TextMessageStartEvent,
+    ToolCallArgsEvent,
+    ToolCallEndEvent,
+    ToolCallStartEvent,
+)
+
+
+# --- Internal Application-Specific Events ---
 
 class AppInputEvent(BaseEvent):
     """
-    Event published when the application receives input intended for an agent.
+    Event published by a UI client when the user submits input
+    intended for the application or an agent.
     """
-    raw_text: str
-    # The command_input provides more structured access to the input,
-    # like command word, arguments string, etc.
-    command_input: AbstractCommandInput
-
-    class Config:
-        arbitrary_types_allowed = True # For AbstractCommandInput if it's a Protocol
-
-
-class AgentOutputEvent(BaseEvent):
-    """
-    Event published by an agent when it wants to send a message to the UI/user.
-    """
-    message: str
-    style: Optional[str] = None # e.g., "error", "warning", "success", or rich markup
+    input_text: str
+    source_ui_client_id: Optional[str] = None # e.g., "terminal", "web_ui_session_xyz"
+    event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
 
 class AgentLifecycleEvent(BaseEvent):
     """
     Event published by app_core when an agent's lifecycle state changes.
+    This is an internal event for application logic, distinct from ag_ui run/step events.
     """
-    agent_name: str # The slug of the agent
+    agent_name: str  # The slug of the agent
     lifecycle_type: Literal["activating", "activated", "deactivating", "deactivated"]
-    # 'activating' is before on_enter, 'activated' is after on_enter
-    # 'deactivating' is before on_exit, 'deactivated' is after on_exit
+
+
+class InternalExecuteToolRequest(BaseEvent):
+    """
+    Internal event to request the execution of a specific tool.
+    """
+    tool_call_id: str
+    tool_name: str
+    arguments_json: str
+    parent_message_id: Optional[str] = None # Made Optional to align with ag_ui.ToolCallStartEvent
 
 
 class RequestPromptEvent(BaseEvent):
     """
-    Event published by an agent when it needs dedicated, single-line input from the user.
+    Event published to request dedicated input from the user via a UI client.
     """
-    prompt_message: str # The message to display to the user for the prompt
-    is_sensitive: bool = False # e.g., for password inputs, to hide typing
-    
-    # Used by the prompting mechanism to know what event type to publish back with the answer.
-    # This allows the original requester to listen for a specific response.
-    response_event_type: str 
-    correlation_id: str # To match request with response
+    prompt_message: str
+    is_sensitive: bool = False  # e.g., for password input
+    response_event_type: str # Expected event type for the response
+    correlation_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
 
 class PromptResponseEvent(BaseEvent):
     """
-    Event published by the input mechanism in response to a RequestPromptEvent.
+    Event published by a UI client in response to a RequestPromptEvent.
     """
-    response_event_type: str # Should match the response_event_type from RequestPromptEvent
-    correlation_id: str # Should match the correlation_id from RequestPromptEvent
-    response_text: str   # The text input provided by the user
+    response_event_type: str # Should match the one in RequestPromptEvent
+    correlation_id: str
+    response_text: str
 
-# Example of another potential event, if needed in future:
-from enum import Enum
-# from dataclasses import dataclass # Removed dataclass import
 
-class SystemMessageType(Enum):
-    INFO = "info"
-    ERROR = "error"
-    WARNING = "warning"
-    SUCCESS = "success" # Added for more specific styling
-    RAW = "raw" # For messages that should be printed as-is, without prefixes like "Error:"
-
-# @dataclass # Removed @dataclass decorator
-class SystemMessageEvent(BaseEvent): # Inherits from BaseEvent (Pydantic BaseModel)
-    """
-    Event published by core application components (like app_core or main)
-    to display messages to the terminal.
-    """
-    message: str
-    message_type: SystemMessageType = Field(default=SystemMessageType.INFO)
-    details: Optional[str] = Field(default=None) # For error details, similar to send_error
-    style: Optional[str] = Field(default=None) # Allow direct Rich style override if needed
-
-# class AgentErrorEvent(BaseEvent):
-#     """Event published by an agent when an unrecoverable error occurs within it."""
-#     agent_name: str
-#     error_message: str
-#     details: Optional[str] = None
+# Ensure all relevant events are easily accessible via pocket_commander.events
+__all__ = [
+    # pocket_commander.event_bus
+    "BaseEvent",
+    # pocket_commander.ag_ui.events
+    "EventType",
+    "AgUiBaseEvent",
+    "CustomEvent",
+    "AgUiEventUnion",
+    "MessagesSnapshotEvent",
+    "RawEvent",
+    "RunErrorEvent",
+    "RunFinishedEvent",
+    "RunStartedEvent",
+    "StateDeltaEvent",
+    "StateSnapshotEvent",
+    "StepFinishedEvent",
+    "StepStartedEvent",
+    "TextMessageContentEvent",
+    "TextMessageEndEvent",
+    "TextMessageStartEvent",
+    "ToolCallArgsEvent",
+    "ToolCallEndEvent",
+    "ToolCallStartEvent",
+    # Internal events
+    "AppInputEvent",
+    "InternalExecuteToolRequest",
+    "AgentLifecycleEvent",
+    "RequestPromptEvent", # Added
+    "PromptResponseEvent", # Added
+]

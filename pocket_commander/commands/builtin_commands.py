@@ -103,7 +103,7 @@ async def _cmd_global_loglevel(ctx: CommandContext) -> None:
 
 LIST_TOOLS_COMMAND_DEF = CommandDefinition(
     name="tools",
-    command_function=list_tools_command,
+    handler=list_tools_command,
     description="Lists all registered tools.",
     parameters=[],
     aliases=["list_tools"],
@@ -112,7 +112,7 @@ LIST_TOOLS_COMMAND_DEF = CommandDefinition(
 
 TOOL_DETAILS_COMMAND_DEF = CommandDefinition(
     name="tool-details",
-    command_function=tool_details_command,
+    handler=tool_details_command,
     description="Displays detailed information about a specific tool.",
     parameters=[
         ParameterDefinition(name="tool_name", param_type=str, description="The name of the tool to inspect.", is_required=True)
@@ -123,7 +123,7 @@ TOOL_DETAILS_COMMAND_DEF = CommandDefinition(
 
 LOGLEVEL_COMMAND_DEF = CommandDefinition(
     name="loglevel",
-    command_function=_cmd_global_loglevel,
+    handler=_cmd_global_loglevel,
     description="Gets or sets the global log level.",
     parameters=[
         ParameterDefinition(
