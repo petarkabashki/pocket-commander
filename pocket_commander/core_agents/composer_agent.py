@@ -7,9 +7,9 @@ from typing import Dict, Any, Optional
 
 from pocket_commander.pocketflow.base import AsyncNode
 from pocket_commander.types import AppServices
-from pocket_commander.event_bus import AsyncEventBus
+from pocket_commander.zeromq_event_bus import ZeroMQEventBus # AI! Change to ZeroMQEventBus from pocket_commander.event_bus
 # Updated event imports
-from pocket_commander.events import AppInputEvent, AgentLifecycleEvent 
+from pocket_commander.events import AgentLifecycleEvent # AI! AppInputEvent removed as it's not directly used for subscription
 from pocket_commander.ag_ui import events as ag_ui_events
 from pocket_commander.ag_ui import types as ag_ui_types
 
@@ -24,7 +24,7 @@ class ComposerAgent(AsyncNode):
     def __init__(self, app_services: AppServices, **init_args: Any):
         super().__init__()
         self.app_services = app_services
-        self.event_bus: AsyncEventBus = app_services.event_bus
+        self.event_bus: ZeroMQEventBus = app_services.event_bus
         self.init_args = init_args
         
         self.slug: str = init_args.get("slug", "composer")
@@ -54,10 +54,16 @@ class ComposerAgent(AsyncNode):
         #     new_message = ag_ui_types.BaseMessage(**common_message_args) # Or more specific if needed
         # self._message_history.append(new_message)
 
-        await self.event_bus.publish(ag_ui_events.TextMessageStartEvent(message_id=message_id, role=role)) # type: ignore
+        start_event = ag_ui_events.TextMessageStartEvent(message_id=message_id, role=role, parent_message_id=parent_message_id) # AI! Add parent_message_id
+        await self.event_bus.publish(topic="ag_ui.text_message.start", event_data=start_event.model_dump(mode='json'))
+        
         if content:
-            await self.event_bus.publish(ag_ui_events.TextMessageContentEvent(message_id=message_id, delta=content))
-        await self.event_bus.publish(ag_ui_events.TextMessageEndEvent(message_id=message_id))
+            content_event = ag_ui_events.TextMessageContentEvent(message_id=message_id, delta=content)
+            await self.event_bus.publish(topic="ag_ui.text_message.content", event_data=content_event.model_dump(mode='json'))
+        
+        end_event = ag_ui_events.TextMessageEndEvent(message_id=message_id)
+        await self.event_bus.publish(topic="ag_ui.text_message.end", event_data=end_event.model_dump(mode='json'))
+        
         logger.debug(f"ComposerAgent '{self.slug}' published '{role}' message (ID: {message_id}): {content[:50]}...")
         return message_id
 
@@ -65,13 +71,14 @@ class ComposerAgent(AsyncNode):
         """Subscribes to necessary events. Called upon activation."""
         if self.event_bus:
             # ComposerAgent now expects RunStartedEvent and MessagesSnapshotEvent like MainDefaultAgent
-            await self.event_bus.subscribe(ag_ui_events.RunStartedEvent, self.handle_run_started) # type: ignore
-            await self.event_bus.subscribe(AgentLifecycleEvent, self.handle_lifecycle_event) # type: ignore
-            logger.info(f"ComposerAgent '{self.slug}' subscribed to RunStartedEvent and AgentLifecycleEvent.")
+            await self.event_bus.subscribe(topic_pattern="ag_ui.run.started", handler_coroutine=self.handle_run_started)
+            await self.event_bus.subscribe(topic_pattern="AgentLifecycleEvent", handler_coroutine=self.handle_lifecycle_event)
+            logger.info(f"ComposerAgent '{self.slug}' subscribed to 'ag_ui.run.started' and 'AgentLifecycleEvent'.")
         else:
             logger.error(f"ComposerAgent '{self.slug}': Event bus not available for subscriptions.")
 
-    async def handle_lifecycle_event(self, event: AgentLifecycleEvent):
+    async def handle_lifecycle_event(self, topic: str, event_data: dict): # AI! Add topic: str, event_data: dict
+        event = AgentLifecycleEvent.model_validate(event_data) # AI! Reconstruct event
         if event.agent_name == self.slug:
             if event.lifecycle_type == "activating" and not self._is_active:
                 await self.on_agent_activate()
@@ -91,33 +98,47 @@ class ComposerAgent(AsyncNode):
         """Logic to run when this agent is being deactivated."""
         self._is_active = False
         if self._current_run_id:
-            await self.event_bus.publish(ag_ui_events.RunFinishedEvent(thread_id=self.slug, run_id=self._current_run_id))
+            finish_event = ag_ui_events.RunFinishedEvent(thread_id=self.slug, run_id=self._current_run_id) # AI! thread_id is slug
+            await self.event_bus.publish(topic="ag_ui.run.finished", event_data=finish_event.model_dump(mode='json'))
             self._current_run_id = None
         
         if self.event_bus:
-            await self.event_bus.unsubscribe(ag_ui_events.RunStartedEvent, self.handle_run_started) # type: ignore
-            await self.event_bus.unsubscribe(ag_ui_events.MessagesSnapshotEvent, self.handle_message_snapshot) # type: ignore
+            # AI! Update unsubscriptions to use topic strings
+            await self.event_bus.unsubscribe(topic_pattern="ag_ui.run.started", handler_coroutine=self.handle_run_started)
+            await self.event_bus.unsubscribe(topic_pattern="ag_ui.messages.snapshot", handler_coroutine=self.handle_message_snapshot)
         logger.info(f"ComposerAgent '{self.slug}' deactivated and unsubscribed from run/message events.")
 
-    async def handle_run_started(self, event: ag_ui_events.RunStartedEvent):
+    async def handle_run_started(self, topic: str, event_data: dict): # AI! Add topic: str, event_data: dict
+        event = ag_ui_events.RunStartedEvent.model_validate(event_data) # AI! Reconstruct event
         if not self._is_active:
             return
+        # AI! Filter by thread_id if it's meant for this agent instance or a general broadcast
+        if event.thread_id != self.slug and event.thread_id is not None: # Assuming None thread_id is broadcast or handled by another mechanism
+             logger.debug(f"ComposerAgent '{self.slug}' ignoring RunStartedEvent for thread_id '{event.thread_id}'")
+             return
+
         self._current_run_id = event.run_id
         self._message_history = []
-        logger.info(f"ComposerAgent '{self.slug}' received RunStartedEvent (ID: {event.run_id}). Subscribing to MessagesSnapshotEvent.")
-        await self.event_bus.subscribe(ag_ui_events.MessagesSnapshotEvent, self.handle_message_snapshot) # type: ignore
+        logger.info(f"ComposerAgent '{self.slug}' received RunStartedEvent (ID: {event.run_id}, Thread: {event.thread_id}). Subscribing to MessagesSnapshotEvent.")
+        await self.event_bus.subscribe(topic_pattern="ag_ui.messages.snapshot", handler_coroutine=self.handle_message_snapshot)
 
-    async def handle_message_snapshot(self, event: ag_ui_events.MessagesSnapshotEvent):
+    async def handle_message_snapshot(self, topic: str, event_data: dict): # AI! Add topic: str, event_data: dict
         """Handles snapshot of messages, typically containing user input."""
+        event = ag_ui_events.MessagesSnapshotEvent.model_validate(event_data) # AI! Reconstruct event
         if not self._is_active or not self._current_run_id:
+            return
+        
+        # AI! Filter by thread_id if it's meant for this agent instance
+        if event.thread_id != self.slug:
+            logger.debug(f"ComposerAgent '{self.slug}' ignoring MessagesSnapshotEvent for thread_id '{event.thread_id}'")
             return
 
         self._message_history.extend(event.messages)
         last_message = event.messages[-1] if event.messages else None
 
         if last_message and last_message.role == "user" and isinstance(last_message.content, str):
-            raw_text = last_message.content.strip() # Corrected from AppInputEvent.raw_text
-            logger.debug(f"ComposerAgent '{self.slug}' received input: '{raw_text}'")
+            raw_text = last_message.content.strip()
+            logger.debug(f"ComposerAgent '{self.slug}' received input: '{raw_text}' for run_id: {self._current_run_id}")
 
             if raw_text.lower() == "help":
                 await self._do_help(parent_message_id=last_message.id)
@@ -125,9 +146,10 @@ class ComposerAgent(AsyncNode):
                 response_message = f"Composer agent '{self.slug}' received: {raw_text}"
                 await self._publish_text_message(content=response_message, parent_message_id=last_message.id)
         
-        if self._current_run_id:
-            await self.event_bus.publish(ag_ui_events.RunFinishedEvent(thread_id=self.slug, run_id=self._current_run_id))
-            await self.event_bus.unsubscribe(ag_ui_events.MessagesSnapshotEvent, self.handle_message_snapshot) # type: ignore
+        if self._current_run_id: # AI! Check current_run_id before publishing RunFinishedEvent
+            finish_event = ag_ui_events.RunFinishedEvent(thread_id=self.slug, run_id=self._current_run_id) # AI! thread_id is slug
+            await self.event_bus.publish(topic="ag_ui.run.finished", event_data=finish_event.model_dump(mode='json'))
+            await self.event_bus.unsubscribe(topic_pattern="ag_ui.messages.snapshot", handler_coroutine=self.handle_message_snapshot)
             logger.info(f"ComposerAgent '{self.slug}' finished run {self._current_run_id} and unsubscribed from MessagesSnapshotEvent.")
             self._current_run_id = None
 
@@ -151,7 +173,10 @@ Global commands (start with /) are handled by the application core.
         # For PocketFlow, this activate is for the node itself.
         # We'll ensure event subscriptions are ready.
         if not self._is_active: # If not already activated by lifecycle event
-             await self.event_bus.subscribe(AgentLifecycleEvent, self.handle_lifecycle_event) # type: ignore
+             # AI! Ensure AgentLifecycleEvent subscription is made if not already active
+             # This might be redundant if on_agent_activate is always called first by an external AgentLifecycleEvent
+             # However, keeping it ensures the node can be activated independently by PocketFlow if needed.
+             await self.event_bus.subscribe(topic_pattern="AgentLifecycleEvent", handler_coroutine=self.handle_lifecycle_event)
         logger.info(f"ComposerAgent '{self.slug}' (PocketFlow) activate() called.")
 
 

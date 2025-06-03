@@ -2,7 +2,8 @@
 import asyncio
 import logging
 import uuid
-from typing import Callable, Awaitable, Any, Optional, List, Dict
+import typing
+from typing import Callable, Awaitable, Any, Optional, List, Dict, Type
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.history import FileHistory
@@ -14,10 +15,16 @@ from rich.text import Text
 from rich.markup import escape
 
 from pocket_commander.types import AppServices
-from pocket_commander.event_bus import AsyncEventBus
+from pocket_commander.event_bus import ZeroMQEventBus
 from pocket_commander.ag_ui import events as ag_ui_events
-from pocket_commander.events import RequestPromptEvent, PromptResponseEvent # Internal prompt events
+from pocket_commander.events import (
+    AppInputEvent,
+    RequestPromptEvent,
+    PromptResponseEvent,
+    # AgUiBaseEvent # Alias for pocket_commander.ag_ui.events.BaseEvent - Not strictly needed if handlers use dicts
+)
 from pocket_commander.ag_ui.client import AbstractAgUIClient
+from pocket_commander.ag_ui.types import Role as AgUiRole # For user message publishing
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +47,7 @@ class AppStateAwareCompleter(Completer):
         completions_options.extend(["/exit", "/quit", "/q", "/help", "/agents", "/agent"])
 
         # Agent slugs for direct switching
-        resolved_agents = raw_config.get('resolved_agents', {}) 
+        resolved_agents = raw_config.resolved_agents if raw_config.resolved_agents is not None else {} 
         completions_options.extend([f"/agent {slug}" for slug in resolved_agents.keys()])
         completions_options.extend(list(resolved_agents.keys())) # Allow direct typing of agent slug as command
 
@@ -52,7 +59,7 @@ class AppStateAwareCompleter(Completer):
 
 class TerminalAgUIClient(AbstractAgUIClient):
     """
-    Terminal-based implementation of the AgUIClient.
+    Terminal-based implementation of the AgUIClient using ZeroMQEventBus.
     Manages user interaction via prompt-toolkit and Rich,
     renders ag_ui events, and handles dedicated input prompts.
     """
@@ -64,10 +71,11 @@ class TerminalAgUIClient(AbstractAgUIClient):
         
         self.command_completer = AppStateAwareCompleter(lambda: self.app_services)
         self._running = False
+        self.session_id = str(uuid.uuid4()) # AI! Add session_id
         
-        self.active_dedicated_prompt_request: Optional[RequestPromptEvent] = None
+        self.active_dedicated_prompt_request: Optional[RequestPromptEvent] = None # Store the dict data
         self.dedicated_prompt_response_future: Optional[asyncio.Future[str]] = None
-        self._main_loop_task: Optional[asyncio.Task] = None # To manage the main input loop
+        self._main_loop_task: Optional[asyncio.Task] = None
 
         # Buffers for streaming messages and tool args
         self._message_buffers: Dict[str, List[str]] = {} # message_id -> list of content deltas
@@ -75,77 +83,157 @@ class TerminalAgUIClient(AbstractAgUIClient):
         self._tool_call_args_buffers: Dict[str, List[str]] = {} # tool_call_id -> list of arg deltas
         self._tool_call_names: Dict[str, str] = {} # tool_call_id -> tool_name
 
+        # AI! Subscription configuration using new topic strings and direct handlers
+        self._subscription_config: List[Dict[str, Any]] = [
+            {"topic": "ag_ui.text_message.start", "handler_method_name": "_handle_text_message_stream", "priority": 0},
+            {"topic": "ag_ui.text_message.content", "handler_method_name": "_handle_text_message_stream", "priority": 0},
+            {"topic": "ag_ui.text_message.end", "handler_method_name": "_handle_text_message_stream", "priority": 0},
+            {"topic": "ag_ui.tool_call.start", "handler_method_name": "_handle_tool_call_stream", "priority": 0},
+            {"topic": "ag_ui.tool_call.args", "handler_method_name": "_handle_tool_call_stream", "priority": 0},
+            {"topic": "ag_ui.tool_call.end", "handler_method_name": "_handle_tool_call_stream", "priority": 0},
+            {"topic": "ag_ui.run.error", "handler_method_name": "_handle_run_error", "priority": 0},
+            {"topic": "ag_ui.step.started", "handler_method_name": "_handle_step_started", "priority": 0},
+            {"topic": "ag_ui.step.finished", "handler_method_name": "_handle_step_finished", "priority": 0},
+            # RequestPromptEvent is not an ag_ui.event but handled similarly
+            {"topic": RequestPromptEvent.__name__, "handler_method_name": "_handle_request_prompt_event", "priority": 0},
+        ]
+
+    # AI! Property to get ZeroMQEventBus instance with type safety
+    @property
+    def event_bus(self) -> Optional[ZeroMQEventBus]:
+        if self.app_services and isinstance(self.app_services.event_bus, ZeroMQEventBus):
+            return self.app_services.event_bus
+        # Log or raise error if event_bus is not ZeroMQEventBus or not available
+        if self.app_services and self.app_services.event_bus is not None:
+            logger.error(f"TerminalAgUIClient expected ZeroMQEventBus, but found {type(self.app_services.event_bus)}")
+        return None
+
     async def initialize(self) -> None:
-        """Subscribe to events needed by the terminal client."""
+        """Subscribe to events needed by the terminal client using string topics and direct handlers."""
         if not self.event_bus:
-            logger.error("Event bus not available in TerminalAgUIClient during initialization.")
+            logger.error("ZeroMQEventBus not available in TerminalAgUIClient during initialization.")
             return
 
-        # For dedicated input prompts
-        await self.event_bus.subscribe(RequestPromptEvent, self._handle_request_prompt_event)
-
-        # For rendering ag_ui event stream - subscribe to specific handlers
-        await self.event_bus.subscribe(ag_ui_events.TextMessageStartEvent, self._handle_text_message_start)
-        await self.event_bus.subscribe(ag_ui_events.TextMessageContentEvent, self._handle_text_message_content)
-        await self.event_bus.subscribe(ag_ui_events.TextMessageEndEvent, self._handle_text_message_end)
+        for sub_config in self._subscription_config:
+            handler_method_name = sub_config["handler_method_name"]
+            topic = sub_config["topic"] 
+            priority = sub_config["priority"]
+            
+            try:
+                actual_handler_method = getattr(self, handler_method_name)
+                await self.event_bus.subscribe(
+                    topic_pattern=topic, 
+                    handler_coroutine=actual_handler_method,
+                    priority=priority
+                )
+                logger.debug(f"TerminalAgUIClient subscribed handler '{handler_method_name}' to topic '{topic}' with priority {priority}.")
+            except AttributeError:
+                logger.error(f"Failed to subscribe: Handler method '{handler_method_name}' not found in TerminalAgUIClient.")
+            except Exception as e:
+                logger.error(f"Failed to subscribe handler '{handler_method_name}' to topic '{topic}': {e}")
         
-        await self.event_bus.subscribe(ag_ui_events.ToolCallStartEvent, self._handle_tool_call_start)
-        await self.event_bus.subscribe(ag_ui_events.ToolCallArgsEvent, self._handle_tool_call_args)
-        await self.event_bus.subscribe(ag_ui_events.ToolCallEndEvent, self._handle_tool_call_end)
-
-        await self.event_bus.subscribe(ag_ui_events.RunErrorEvent, self._handle_run_error)
-        await self.event_bus.subscribe(ag_ui_events.StepStartedEvent, self._handle_step_started)
-        await self.event_bus.subscribe(ag_ui_events.StepFinishedEvent, self._handle_step_finished)
-        
-        logger.info(f"TerminalAgUIClient '{self.client_id}' initialized and subscribed to relevant events.")
+        logger.info(f"TerminalAgUIClient '{self.client_id}' initialized and subscriptions set up with ZeroMQEventBus.")
 
     async def handle_ag_ui_event(self, event: ag_ui_events.Event) -> None:
-        # This method could be used if we had a single subscription point,
-        # but direct handlers are cleaner for now.
-        # Example:
-        # if isinstance(event, ag_ui_events.TextMessageStartEvent):
-        #     await self._handle_text_message_start(event)
-        # ... and so on for other event types.
-        logger.debug(f"TerminalAgUIClient received event via generic handler (should be handled by specific subscribers): {event.type}")
+        # This method is part of the AbstractAgUIClient interface.
+        # With specific topic-based subscriptions via ZeroMQEventBus, events are routed directly to handlers.
+        # This method should ideally not be called if subscriptions are set up correctly.
+        logger.warning(f"TerminalAgUIClient received event via generic handle_ag_ui_event (should be handled by specific ZMQ subscribers): {type(event)}")
         pass
 
+    # --- Refactored ag_ui Event Handlers for Output ---
 
-    # --- ag_ui Event Handlers for Output ---
-    async def _handle_text_message_start(self, event: ag_ui_events.TextMessageStartEvent):
-        logger.debug(f"TerminalClient: TextMessageStart: ID={event.message_id}, Role={event.role}")
-        self._message_buffers[event.message_id] = []
-        self._message_roles[event.message_id] = event.role
-        if event.role == "assistant":
-            self.console.print(Text("...", style="italic dim"))
-
-    async def _handle_text_message_content(self, event: ag_ui_events.TextMessageContentEvent):
-        logger.debug(f"TerminalClient: TextMessageContent: ID={event.message_id}, Delta='{escape(event.delta)[:50]}...'")
-        if event.message_id in self._message_buffers:
-            self._message_buffers[event.message_id].append(event.delta)
-            # Live streaming can be added here if desired, though it complicates prompt_toolkit
-        else:
-            logger.warning(f"TerminalClient: Received TextMessageContentEvent for unknown message_id {event.message_id}")
-
-    async def _handle_text_message_end(self, event: ag_ui_events.TextMessageEndEvent):
-        logger.debug(f"TerminalClient: TextMessageEnd: ID={event.message_id}")
-        role = self._message_roles.pop(event.message_id, "unknown")
-        buffered_content = "".join(self._message_buffers.pop(event.message_id, []))
+    async def _handle_text_message_stream(self, topic: str, event_data: dict) -> None:
+        """Handles TEXT_MESSAGE_START, TEXT_MESSAGE_CONTENT, and TEXT_MESSAGE_END events based on topic."""
         
-        style = self._get_style_for_role(role)
-        prefix = ""
-        if role == "user": # User messages are published by _publish_user_message_as_ag_ui_events
-            prefix = "[bold green]You:[/bold green] "
-        elif role == "assistant":
-            agent_slug = self.app_services.get_current_agent_slug() if self.app_services else 'AI'
-            prefix = f"[bold blue]Assistant ({agent_slug}):[/bold blue] "
-        elif role == "tool":
-            prefix = "[bold yellow]Tool Result:[/bold yellow] "
-        elif role == "system":
-            prefix = "[dim cyan]System:[/dim cyan] "
+        # Determine event type from topic
+        # Example: "ag_ui.text_message.start" -> TEXT_MESSAGE_START
+        event_type_str = topic.split('.')[-1].upper() # e.g. START, CONTENT, END
         
-        # Basic way to clear the "..." if prompt_toolkit allows easy line manipulation.
-        # For now, just print on a new line.
-        self.console.print(Text.from_markup(prefix) + Text(buffered_content, style=style))
+        try:
+            # Map string to enum member if needed, or use string directly
+            # For simplicity, we'll compare with expected topic suffixes
+            if topic.endswith("text_message.start"):
+                # specific_event = ag_ui_events.TextMessageStartEvent.model_validate(event_data) # Optional Pydantic validation
+                message_id = event_data.get("message_id")
+                role = event_data.get("role")
+                logger.debug(f"TerminalClient: TextMessageStart: ID={message_id}, Role={role} (Topic: {topic})")
+                if message_id:
+                    self._message_buffers[message_id] = []
+                    self._message_roles[message_id] = role if role else "unknown"
+                if role == "assistant":
+                    self.console.print(Text("...", style="italic dim"))
+
+            elif topic.endswith("text_message.content"):
+                # specific_event = ag_ui_events.TextMessageContentEvent.model_validate(event_data)
+                message_id = event_data.get("message_id")
+                delta = event_data.get("delta")
+                logger.debug(f"TerminalClient: TextMessageContent: ID={message_id}, Delta='{escape(delta)[:50]}...' (Topic: {topic})")
+                if message_id in self._message_buffers:
+                    self._message_buffers[message_id].append(delta if delta else "")
+                else:
+                    logger.warning(f"TerminalClient: Received TextMessageContentEvent for unknown message_id {message_id} (Topic: {topic})")
+            
+            elif topic.endswith("text_message.end"):
+                # specific_event = ag_ui_events.TextMessageEndEvent.model_validate(event_data)
+                message_id = event_data.get("message_id")
+                logger.debug(f"TerminalClient: TextMessageEnd: ID={message_id} (Topic: {topic})")
+                role = self._message_roles.pop(message_id, "unknown")
+                buffered_content = "".join(self._message_buffers.pop(message_id, []))
+                
+                style = self._get_style_for_role(role)
+                prefix = ""
+                if role == "user":
+                    prefix = "[bold green]You:[/bold green] "
+                elif role == "assistant":
+                    agent_slug = self.app_services.get_current_agent_slug() if self.app_services else 'AI'
+                    prefix = f"[bold blue]Assistant ({agent_slug}):[/bold blue] "
+                elif role == "tool":
+                    prefix = "[bold yellow]Tool Result:[/bold yellow] "
+                elif role == "system":
+                    prefix = "[dim cyan]System:[/dim cyan] "
+                
+                self.console.print(Text.from_markup(prefix) + Text(buffered_content, style=style))
+            else:
+                logger.warning(f"TerminalClient: _handle_text_message_stream received unexpected topic: {topic}")
+
+        except Exception as e:
+            logger.error(f"TerminalClient: Error processing text message stream for topic '{topic}': {e}\nData: {event_data}")
+
+
+    async def _handle_tool_call_stream(self, topic: str, event_data: dict) -> None:
+        """Handles TOOL_CALL_START, TOOL_CALL_ARGS, and TOOL_CALL_END events based on topic."""
+        try:
+            if topic.endswith("tool_call.start"):
+                # specific_event = ag_ui_events.ToolCallStartEvent.model_validate(event_data)
+                tool_call_id = event_data.get("tool_call_id")
+                tool_name = event_data.get("tool_name")
+                logger.debug(f"TerminalClient: ToolCallStart: ID={tool_call_id}, Name={tool_name} (Topic: {topic})")
+                if tool_call_id:
+                    self._tool_call_args_buffers[tool_call_id] = []
+                    self._tool_call_names[tool_call_id] = tool_name if tool_name else "unknown_tool"
+                self.console.print(Text(f"Calling tool: {tool_name} (ID: {tool_call_id})...", style="italic magenta"))
+
+            elif topic.endswith("tool_call.args"):
+                # specific_event = ag_ui_events.ToolCallArgsEvent.model_validate(event_data)
+                tool_call_id = event_data.get("tool_call_id")
+                delta = event_data.get("delta")
+                logger.debug(f"TerminalClient: ToolCallArgs: ID={tool_call_id}, Delta='{escape(delta)[:50]}...' (Topic: {topic})")
+                if tool_call_id in self._tool_call_args_buffers:
+                    self._tool_call_args_buffers[tool_call_id].append(delta if delta else "")
+                else:
+                    logger.warning(f"TerminalClient: Received ToolCallArgsEvent for unknown tool_call_id {tool_call_id} (Topic: {topic})")
+
+            elif topic.endswith("tool_call.end"):
+                # specific_event = ag_ui_events.ToolCallEndEvent.model_validate(event_data)
+                tool_call_id = event_data.get("tool_call_id")
+                logger.debug(f"TerminalClient: ToolCallEnd: ID={tool_call_id} (Topic: {topic})")
+                tool_name = self._tool_call_names.pop(tool_call_id, "unknown_tool")
+                logger.info(f"Tool '{tool_name}' (ID: {tool_call_id}) call processing finished by agent.")
+            else:
+                logger.warning(f"TerminalClient: _handle_tool_call_stream received unexpected topic: {topic}")
+        except Exception as e:
+            logger.error(f"TerminalClient: Error processing tool call stream for topic '{topic}': {e}\nData: {event_data}")
 
     def _get_style_for_role(self, role: str) -> str:
         if role == "user": return "green"
@@ -155,117 +243,187 @@ class TerminalAgUIClient(AbstractAgUIClient):
         if role == "error": return "bold red"
         return ""
 
-    async def _handle_tool_call_start(self, event: ag_ui_events.ToolCallStartEvent):
-        logger.debug(f"TerminalClient: ToolCallStart: ID={event.tool_call_id}, Name={event.tool_name}")
-        self._tool_call_args_buffers[event.tool_call_id] = []
-        self._tool_call_names[event.tool_call_id] = event.tool_name
-        self.console.print(Text(f"Calling tool: {event.tool_name} (ID: {event.tool_call_id})...", style="italic magenta"))
+    async def _handle_run_error(self, topic: str, event_data: dict):
+        # event = ag_ui_events.RunErrorEvent.model_validate(event_data) # Optional Pydantic validation
+        message = event_data.get("message", "Unknown error")
+        code = event_data.get("code", "N/A")
+        logger.error(f"TerminalClient: Received RunErrorEvent (Topic: {topic}): {message} (Code: {code})")
+        self.console.print(Text(f"Error during run: {message}", style="bold red"))
 
-    async def _handle_tool_call_args(self, event: ag_ui_events.ToolCallArgsEvent):
-        logger.debug(f"TerminalClient: ToolCallArgs: ID={event.tool_call_id}, Delta='{escape(event.delta)[:50]}...'")
-        if event.tool_call_id in self._tool_call_args_buffers:
-            self._tool_call_args_buffers[event.tool_call_id].append(event.delta)
-        else:
-            logger.warning(f"TerminalClient: Received ToolCallArgsEvent for unknown tool_call_id {event.tool_call_id}")
+    async def _handle_step_started(self, topic: str, event_data: dict):
+        # event = ag_ui_events.StepStartedEvent.model_validate(event_data) # Optional Pydantic validation
+        step_name = event_data.get("step_name", "Unnamed step")
+        logger.info(f"TerminalClient: Step Started (Topic: {topic}): {step_name}")
+        self.console.print(Text(f"Step Started: {step_name}", style="dim"))
 
-    async def _handle_tool_call_end(self, event: ag_ui_events.ToolCallEndEvent):
-        logger.debug(f"TerminalClient: ToolCallEnd: ID={event.tool_call_id}")
-        tool_name = self._tool_call_names.pop(event.tool_call_id, "unknown_tool")
-        # Args are buffered but typically not displayed here; result comes as a ToolMessage
-        # which is handled by _handle_text_message_end with role="tool"
-        logger.info(f"Tool '{tool_name}' (ID: {event.tool_call_id}) call processing finished by agent.")
-
-
-    async def _handle_run_error(self, event: ag_ui_events.RunErrorEvent):
-        logger.error(f"TerminalClient: Received RunErrorEvent: {event.message} (Code: {event.code})")
-        self.console.print(Text(f"Error during run: {event.message}", style="bold red"))
-
-    async def _handle_step_started(self, event: ag_ui_events.StepStartedEvent):
-        logger.info(f"TerminalClient: Step Started: {event.step_name}")
-        self.console.print(Text(f"Step Started: {event.step_name}", style="dim"))
-
-    async def _handle_step_finished(self, event: ag_ui_events.StepFinishedEvent):
-        logger.info(f"TerminalClient: Step Finished: {event.step_name}")
-        self.console.print(Text(f"Step Finished: {event.step_name}", style="dim"))
+    async def _handle_step_finished(self, topic: str, event_data: dict):
+        # event = ag_ui_events.StepFinishedEvent.model_validate(event_data) # Optional Pydantic validation
+        step_name = event_data.get("step_name", "Unnamed step")
+        logger.info(f"TerminalClient: Step Finished (Topic: {topic}): {step_name}")
+        self.console.print(Text(f"Step Finished: {step_name}", style="dim"))
 
     # --- Dedicated Prompt Handling ---
-    async def _handle_request_prompt_event(self, event: RequestPromptEvent):
+    async def _handle_request_prompt_event(self, topic: str, event_data: dict):
+        # event = RequestPromptEvent.model_validate(event_data) # Optional Pydantic validation
         if self.active_dedicated_prompt_request:
             logger.warning("TerminalClient received a new RequestPromptEvent while another is active. Ignoring new one.")
-            # Optionally, queue or reject the new request
             return
-        logger.debug(f"TerminalClient: Received RequestPromptEvent (id: {event.correlation_id}): {event.prompt_message}")
-        self.active_dedicated_prompt_request = event
-        # Create a new future for each request to avoid race conditions
+        
+        correlation_id = event_data.get("correlation_id")
+        prompt_message = event_data.get("prompt_message", "Enter input:")
+        logger.debug(f"TerminalClient: Received RequestPromptEvent (Topic: {topic}, id: {correlation_id}): {prompt_message}")
+        
+        # Store the raw event_data as it might be needed by _main_loop
+        self.active_dedicated_prompt_request = event_data 
         self.dedicated_prompt_response_future = asyncio.get_running_loop().create_future()
+
+    # AI! Override send_app_input from AbstractAgUIClient for ZeroMQEventBus
+    async def send_app_input(self, user_input: str, active_agent_slug: str) -> None: # AI! Added active_agent_slug
+        """
+        Sends user input to the application core and echoes it to the UI.
+        Uses ZeroMQEventBus for publishing.
+        """
+        logger.info(f"[{self.client_id}] send_app_input called with: '{user_input}', active_agent_slug: '{active_agent_slug}'")
+
+        if not self.event_bus:
+            logger.error(f"[{self.client_id}] ZeroMQEventBus not available to send AppInputEvent for '{user_input}'.")
+            return
+
+        # 1. Publish user's own message for display (as ag_ui events with new topics)
+        # This part makes the user's own input appear in their terminal.
+        user_message_id = str(uuid.uuid4())
+        logger.debug(f"[{self.client_id}] Publishing user's own input display events (message_id: {user_message_id}) for: '{user_input}'")
+        
+        try:
+            # TextMessageStart
+            start_event_data = ag_ui_events.TextMessageStartEvent(
+                type=ag_ui_events.EventType.TEXT_MESSAGE_START,
+                message_id=user_message_id,
+                role="user" # Use literal string value for AgUiRole
+            ).model_dump()
+            await self.event_bus.publish(ag_ui_events.Topics.TEXT_MESSAGE_START, start_event_data)
+
+            # TextMessageContent
+            if user_input: 
+                content_event_data = ag_ui_events.TextMessageContentEvent(
+                    type=ag_ui_events.EventType.TEXT_MESSAGE_CONTENT,
+                    message_id=user_message_id,
+                    delta=user_input
+                ).model_dump()
+                await self.event_bus.publish(ag_ui_events.Topics.TEXT_MESSAGE_CONTENT, content_event_data)
+
+            # TextMessageEnd
+            end_event_data = ag_ui_events.TextMessageEndEvent(
+                type=ag_ui_events.EventType.TEXT_MESSAGE_END,
+                message_id=user_message_id
+            ).model_dump()
+            await self.event_bus.publish(ag_ui_events.Topics.TEXT_MESSAGE_END, end_event_data)
+            logger.debug(f"[{self.client_id}] Successfully published user display events for '{user_input}'.")
+        except Exception as e:
+            logger.error(f"[{self.client_id}] Error publishing user display events for '{user_input}': {e}", exc_info=True)
+            # Continue to attempt publishing AppInputEvent anyway
+
+        # 2. Publish the AppInputEvent for AppCore with the topic "app.ui.input"
+        try:
+            app_input_event = AppInputEvent(
+                input_text=user_input,
+                source_ui_client_id=self.client_id
+                # session_id and active_agent_slug are not part of current AppInputEvent definition
+            )
+            app_input_event_data = app_input_event.model_dump() # Convert Pydantic model to dict
+            
+            logger.info(f"[{self.client_id}] Preparing to publish AppInputEvent to topic '{AppInputEvent.TOPIC}': {app_input_event.model_dump_json(indent=2)}")
+            
+            await self.event_bus.publish(AppInputEvent.TOPIC, app_input_event_data)
+            logger.info(f"[{self.client_id}] AppInputEvent for '{user_input}' published successfully to topic '{AppInputEvent.TOPIC}'.")
+        except Exception as e:
+            logger.error(f"[{self.client_id}] Error publishing AppInputEvent for '{user_input}': {e}", exc_info=True)
 
 
     async def request_dedicated_input(self, prompt_message: str, is_sensitive: bool = False) -> str:
-        """
-        This method is called by other parts of the system (e.g. an Agent)
-        to request dedicated input from the user via this UI client.
-        It publishes a RequestPromptEvent, and the main loop will handle it.
-        """
         if not self.event_bus:
-            logger.error("Event bus not available for request_dedicated_input.")
+            logger.error("ZeroMQEventBus not available for request_dedicated_input.")
             return ""
         
-        # Ensure no other dedicated prompt is active from this client's perspective
-        # This check might be more robust if it considers if _main_loop_task is already handling one
         if self.active_dedicated_prompt_request and not (self.dedicated_prompt_response_future and self.dedicated_prompt_response_future.done()):
              logger.error("request_dedicated_input called while another dedicated prompt is already active by this client.")
-             # This might indicate a logic flaw if an agent calls this while UI is already in prompt mode.
-             # For now, we allow it, and _handle_request_prompt_event will queue/ignore.
-             # A more robust solution might involve a lock or state machine.
-             pass
-
+             return "" 
 
         correlation_id = str(uuid.uuid4())
-        # The response_event_type is not strictly needed if we use the future,
-        # but good for consistency if other systems listen.
-        response_event_type = f"prompt_response_for_client_{self.client_id}_{correlation_id}"
+        response_topic_for_this_request = f"prompt_response_for_client_{self.client_id}_{correlation_id}"
         
-        local_future = asyncio.get_running_loop().create_future()
+        request_event_data = RequestPromptEvent(
+            prompt_message=prompt_message,
+            is_sensitive=is_sensitive,
+            response_event_type=response_topic_for_this_request, 
+            correlation_id=correlation_id,
+        ).model_dump()
+        
+        request_topic = RequestPromptEvent.__name__
+        await self.event_bus.publish(request_topic, request_event_data)
+        
+        local_future_for_this_request = asyncio.get_running_loop().create_future()
+        # _handle_request_prompt_event will set self.active_dedicated_prompt_request (with the dict data)
+        # and self.dedicated_prompt_response_future (with this new future instance)
+        # This assignment here is slightly ahead, but _handle_request_prompt_event confirms it.
+        # The critical part is that _main_loop uses the future set by _handle_request_prompt_event.
+        
+        # To ensure the future awaited is the one set by the handler:
+        # We'll rely on _handle_request_prompt_event to set self.dedicated_prompt_response_future.
+        # This method will then await that.
+        
+        # This creates a new future that this call will wait on.
+        # _handle_request_prompt_event will set self.dedicated_prompt_response_future to this instance.
+        # _main_loop will then complete self.dedicated_prompt_response_future.
+        self.dedicated_prompt_response_future = local_future_for_this_request # Temp store, handler will confirm
 
-        # This is a "command" to self to enter dedicated prompt mode.
-        # The actual prompt display happens in _main_loop when it sees active_dedicated_prompt_request.
-        await self.event_bus.publish(
-            RequestPromptEvent(
-                prompt_message=prompt_message,
-                is_sensitive=is_sensitive, # TODO: Implement sensitive input handling in prompt_async
-                response_event_type=response_event_type, # For other listeners
-                correlation_id=correlation_id,
-                # We need a way to link this request to the local_future
-                # One way is to store local_future in a dict keyed by correlation_id
-                # and _main_loop sets it when it gets the input.
-                # For now, _handle_request_prompt_event sets self.dedicated_prompt_response_future
-                # which this method will await.
-            )
-        )
-        
-        # Wait for the _main_loop to process the RequestPromptEvent and set the future
-        # This requires _handle_request_prompt_event to have set self.dedicated_prompt_response_future
-        current_dedicated_future = self.dedicated_prompt_response_future
-        if current_dedicated_future:
-            try:
-                # This relies on _main_loop picking up self.active_dedicated_prompt_request
-                # and then setting the result on self.dedicated_prompt_response_future
-                return await asyncio.wait_for(current_dedicated_future, timeout=300.0) # 5 minutes timeout
-            except asyncio.TimeoutError:
-                logger.error(f"Timeout waiting for dedicated input: {prompt_message}")
-                # Clean up the specific request if it's still this one
-                if self.active_dedicated_prompt_request and self.active_dedicated_prompt_request.correlation_id == correlation_id:
-                    self.active_dedicated_prompt_request = None
-                    if current_dedicated_future and not current_dedicated_future.done():
-                        current_dedicated_future.cancel() # Cancel the future
-                return ""
-            finally:
-                 # Ensure future is reset if it was for this specific request
-                if self.dedicated_prompt_response_future is current_dedicated_future:
-                    self.dedicated_prompt_response_future = None # Reset for next request
-        else:
-            logger.error("Dedicated prompt future not available when expected.")
+        try:
+            # Wait for _handle_request_prompt_event to receive the event and set up the future properly.
+            # A short sleep might be needed if the event bus is slow, but ideally, it's quick.
+            # For robustness, a loop with timeout could check if self.dedicated_prompt_response_future
+            # has been set by the handler to `local_future_for_this_request`.
+            # However, simpler is to assume the handler runs and sets it.
+            # The `_main_loop` will use `self.active_dedicated_prompt_request` (which is the dict)
+            # and `self.dedicated_prompt_response_future` (which is the future instance).
+            
+            # The future that _handle_request_prompt_event sets up is the one we need to await.
+            # Let's ensure it's set before awaiting.
+            # A more robust pattern might involve passing the future to the handler via the event,
+            # or a dictionary mapping correlation_ids to futures.
+            # For now, we rely on the modal nature of prompts for this client.
+
+            # The future is created and stored in self.dedicated_prompt_response_future by _handle_request_prompt_event
+            # This method then awaits it.
+            if not self.dedicated_prompt_response_future or self.dedicated_prompt_response_future.done():
+                 # This case implies _handle_request_prompt_event hasn't run or a previous one is stuck.
+                 # For simplicity, we assume _handle_request_prompt_event will create a new one.
+                 # The assignment in _handle_request_prompt_event is key.
+                 pass # The future is set in the handler.
+
+            # The future we await is the one set by _handle_request_prompt_event
+            # This `local_future_for_this_request` is effectively what `_handle_request_prompt_event` will assign to `self.dedicated_prompt_response_future`
+            
+            # The _main_loop will use the `prompt_message` and `is_sensitive` from `self.active_dedicated_prompt_request` (the dict)
+            # and will set the result on `self.dedicated_prompt_response_future` (the future instance).
+
+            return await asyncio.wait_for(local_future_for_this_request, timeout=300.0)
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout waiting for dedicated input: {prompt_message}")
+            # Check if the active request matches this timed-out one
+            active_req_data = self.active_dedicated_prompt_request
+            if active_req_data and active_req_data.get("correlation_id") == correlation_id:
+                self.active_dedicated_prompt_request = None 
+            if not local_future_for_this_request.done():
+                local_future_for_this_request.cancel()
             return ""
+        finally:
+            # Clear the global future if it's the one we just processed and it matches
+            if self.dedicated_prompt_response_future is local_future_for_this_request:
+                 self.dedicated_prompt_response_future = None
+            # Clear the active request if it matches this one, regardless of future state
+            active_req_data = self.active_dedicated_prompt_request
+            if active_req_data and active_req_data.get("correlation_id") == correlation_id:
+                self.active_dedicated_prompt_request = None
 
 
     # --- Main Loop and Start/Stop ---
@@ -279,10 +437,7 @@ class TerminalAgUIClient(AbstractAgUIClient):
         logger.info(f"TerminalAgUIClient '{self.client_id}' started.")
         self.console.print(f"[bold cyan]Welcome to Pocket Commander (Client: {self.client_id})![/bold cyan]")
         
-        # Run the main loop in a separate task so start() is not blocking
         self._main_loop_task = asyncio.create_task(self._main_loop())
-        # Optionally, add error handling for the task if it exits unexpectedly
-        # self._main_loop_task.add_done_callback(self._handle_main_loop_completion)
 
     async def stop(self) -> None:
         if not self._running:
@@ -294,13 +449,13 @@ class TerminalAgUIClient(AbstractAgUIClient):
         
         if self.active_dedicated_prompt_request and self.dedicated_prompt_response_future and not self.dedicated_prompt_response_future.done():
             self.dedicated_prompt_response_future.cancel("Client stopping")
-            self.active_dedicated_prompt_request = None
-            self.dedicated_prompt_response_future = None
+        self.active_dedicated_prompt_request = None 
+        self.dedicated_prompt_response_future = None 
 
         if self._main_loop_task and not self._main_loop_task.done():
             self._main_loop_task.cancel()
             try:
-                await self._main_loop_task # Allow cleanup within the loop
+                await self._main_loop_task
             except asyncio.CancelledError:
                 logger.info(f"Main input loop for '{self.client_id}' was cancelled.")
         self._main_loop_task = None
@@ -310,46 +465,47 @@ class TerminalAgUIClient(AbstractAgUIClient):
     async def _main_loop(self):
         while self._running:
             try:
+                # Dedicated prompt handling
                 if self.active_dedicated_prompt_request and self.dedicated_prompt_response_future:
-                    # Handle dedicated prompt
-                    prompt_event = self.active_dedicated_prompt_request
+                    # self.active_dedicated_prompt_request is now a dict
+                    prompt_event_data = self.active_dedicated_prompt_request 
                     future_to_set = self.dedicated_prompt_response_future
                     
-                    # Clear before await, to allow new requests if this one is slow
-                    # self.active_dedicated_prompt_request = None 
-                    # self.dedicated_prompt_response_future = None # This future is for THIS request.
+                    prompt_message = prompt_event_data.get("prompt_message", "Input:")
+                    is_sensitive = prompt_event_data.get("is_sensitive", False)
+                    correlation_id = prompt_event_data.get("correlation_id")
+                    response_event_topic = prompt_event_data.get("response_event_type") # This is the topic
 
-                    logger.debug(f"TerminalClient MainLoop: Processing dedicated prompt (id: {prompt_event.correlation_id}): {prompt_event.prompt_message}")
+                    logger.debug(f"TerminalClient MainLoop: Processing dedicated prompt (id: {correlation_id}): {prompt_message}")
                     
-                    # Actual prompt display for dedicated input
                     user_input_str = await self.session.prompt_async(
-                        f"{prompt_event.prompt_message}: ",
-                        is_password=prompt_event.is_sensitive # Use is_sensitive for password mode
+                        f"{prompt_message}: ",
+                        is_password=is_sensitive
                     )
 
-                    if not self._running: break # Check running state after await
+                    if not self._running: break 
 
-                    # Publish response for other systems
-                    await self.event_bus.publish(
-                        PromptResponseEvent(
-                            response_event_type=prompt_event.response_event_type,
-                            correlation_id=prompt_event.correlation_id,
+                    # Publish PromptResponseEvent using ZeroMQEventBus
+                    if response_event_topic: # Ensure topic is available
+                        response_payload_dict = PromptResponseEvent(
+                            response_event_type=response_event_topic, # This field is mostly for consistency now
+                            correlation_id=correlation_id,
                             response_text=user_input_str.strip()
-                        )
-                    )
-                    # Set the future for the original requester
+                        ).model_dump()
+                        if self.event_bus:
+                            await self.event_bus.publish(response_event_topic, response_payload_dict)
+                    else:
+                        logger.error(f"TerminalClient MainLoop: Missing response_event_type (topic) for dedicated prompt {correlation_id}")
+                    
                     if future_to_set and not future_to_set.done():
                         future_to_set.set_result(user_input_str.strip())
                     
-                    # Important: Reset after handling to allow next prompt or main input
                     self.active_dedicated_prompt_request = None
-                    # self.dedicated_prompt_response_future is reset by request_dedicated_input or if it was this one.
-                    # If it was the one set by _handle_request_prompt_event, it should be cleared.
                     if self.dedicated_prompt_response_future is future_to_set:
                          self.dedicated_prompt_response_future = None
-                    continue # Go back to start of loop to check for new dedicated prompts or main input
+                    continue
 
-                # Regular input prompt
+                # Regular prompt
                 current_agent_slug = self.app_services.get_current_agent_slug() if self.app_services else "N/A"
                 prompt_text_display = f"({current_agent_slug})> "
                 
@@ -359,10 +515,10 @@ class TerminalAgUIClient(AbstractAgUIClient):
                     completer=self.command_completer,
                 )
 
-                if not self._running: break # Check running state after await
+                if not self._running: break 
 
-                if user_input_str.strip(): # Only process if there's actual input
-                    await self.send_app_input(user_input_str) # This now also publishes ag_ui user message
+                if user_input_str.strip():
+                    await self.send_app_input(user_input_str, active_agent_slug=current_agent_slug) 
 
             except KeyboardInterrupt:
                 if not self._running: break
@@ -370,19 +526,18 @@ class TerminalAgUIClient(AbstractAgUIClient):
             except EOFError:
                 if not self._running: break
                 self.console.print("\n[bold red]EOF received. Exiting...[/bold red]")
-                if self._running: # Avoid sending /exit if already stopping
-                    await self.send_app_input("/exit") # Gracefully exit via app logic
-                break # Exit main loop
+                if self._running: 
+                    await self.send_app_input("/exit")
+                break 
             except asyncio.CancelledError:
                 logger.info(f"Main input loop for '{self.client_id}' cancelled during prompt_async or processing.")
-                break # Exit loop if cancelled
+                break
             except Exception as e:
                 if not self._running: break
                 self.console.print(f"[bold red]An unexpected error occurred in terminal client '{self.client_id}': {e}[/bold red]")
                 logger.exception(f"Terminal client '{self.client_id}' main loop error")
-                await asyncio.sleep(1) # Avoid fast error loop
+                await asyncio.sleep(1) 
 
         logger.info(f"Terminal client '{self.client_id}' main interaction loop ended.")
-        if self._running : # If loop exited but client was not explicitly stopped
+        if self._running : 
              self.console.print(f"Terminal client {self.client_id} session ended.")
-        # self._running = False # Ensure state is consistent

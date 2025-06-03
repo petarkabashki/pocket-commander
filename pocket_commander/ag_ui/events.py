@@ -4,11 +4,12 @@ This module contains the event types for the Agent User Interaction Protocol Pyt
 
 from enum import Enum
 from typing import Any, List, Literal, Optional, Union, Annotated
-import uuid
 from pydantic import Field
 
-from .types import Message, State, ConfiguredBaseModel, Role
+# Import InternalBaseEvent from .types (within the same ag_ui package)
+from .types import Message, State, Role, InternalBaseEvent
 
+AG_UI_EVENT_PREFIX: str = "ag_ui"
 
 class EventType(str, Enum):
     """
@@ -30,15 +31,17 @@ class EventType(str, Enum):
     RUN_ERROR = "RUN_ERROR"
     STEP_STARTED = "STEP_STARTED"
     STEP_FINISHED = "STEP_FINISHED"
+    REQUEST_PROMPT = "REQUEST_PROMPT"  # Added
+    PROMPT_RESPONSE = "PROMPT_RESPONSE"  # Added
 
 
-class BaseEvent(ConfiguredBaseModel):
+class BaseEvent(InternalBaseEvent): # Inherits from InternalBaseEvent (now from .types)
     """
     Base event for all events in the Agent User Interaction Protocol.
+    Inherits event_id, timestamp, topic from InternalBaseEvent.
+    Adds AG UI specific fields.
     """
-    event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    type: EventType
-    timestamp: Optional[int] = None
+    type: EventType # This is the AG UI specific type
     raw_event: Optional[Any] = None
 
 
@@ -57,7 +60,7 @@ class TextMessageContentEvent(BaseEvent):
     """
     type: Literal[EventType.TEXT_MESSAGE_CONTENT]
     message_id: str
-    delta: str  # This should not be an empty string
+    delta: str
 
     def model_post_init(self, __context):
         if len(self.delta) == 0:
@@ -184,6 +187,25 @@ class StepFinishedEvent(BaseEvent):
     step_name: str
 
 
+class RequestPromptEvent(BaseEvent): # Added
+    """
+    Event requesting user input via a prompt.
+    """
+    type: Literal[EventType.REQUEST_PROMPT]
+    prompt_id: str
+    message: str  # The message/question to display to the user
+    is_sensitive: bool = False  # For hiding input, e.g., passwords
+
+
+class PromptResponseEvent(BaseEvent): # Added
+    """
+    Event carrying the user's response to a prompt.
+    """
+    type: Literal[EventType.PROMPT_RESPONSE]
+    prompt_id: str
+    value: str  # The value entered by the user
+
+
 Event = Annotated[
     Union[
         TextMessageStartEvent,
@@ -202,6 +224,8 @@ Event = Annotated[
         RunErrorEvent,
         StepStartedEvent,
         StepFinishedEvent,
+        RequestPromptEvent,  # Added
+        PromptResponseEvent,  # Added
     ],
     Field(discriminator="type")
 ]

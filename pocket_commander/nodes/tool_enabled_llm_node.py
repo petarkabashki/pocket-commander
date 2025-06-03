@@ -14,11 +14,7 @@ from ..tools.definition import ToolDefinition # Import ToolDefinition for type h
 
 # Configure logging for this node
 # Standard logging setup
-logging.basicConfig(
-    level=logging.INFO, # Changed to INFO for less verbose default logging
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler()] # Ensures logs go to stdout/stderr
-)
+
 logger = logging.getLogger(__name__)
 
 class ToolEnabledLLMNode(AsyncNode):

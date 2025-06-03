@@ -2,10 +2,12 @@ from typing import Protocol, Dict, Any, Callable, Coroutine, List, Optional, Typ
 from dataclasses import dataclass, field
 from enum import Enum
 
+from pocket_commander.pocketflow.base import BaseNode # For type hinting Node/Flow classes
+from pocket_commander.event_bus import ZeroMQEventBus # Moved import here
+
 if TYPE_CHECKING: # Added this block
     from pocket_commander.tools.registry import ToolRegistry
-    from pocket_commander.pocketflow.base import BaseNode # For type hinting Node/Flow classes
-    from pocket_commander.event_bus import AsyncEventBus # Assuming event_bus.py will exist
+    # ZeroMQEventBus import moved out
 
 #%% For Command System
 class AbstractCommandInput(Protocol):
@@ -24,7 +26,7 @@ class ParameterDefinition:
     name: str
     param_type: type
     description: Optional[str] = None
-    is_required: bool = True
+    is_required: bool = True # Changed from required to is_required for consistency
     default: Optional[Any] = None
     # For choices/enum like behavior, if type is string
     choices: Optional[List[str]] = None
@@ -45,7 +47,7 @@ class CommandDefinition:
 @dataclass
 class CommandContext:
     """Holds the context for a command's execution."""
-    command_input: AbstractCommandInput
+    command_input: AbstractCommandInput # Corrected from input to command_input
     output_handler: AbstractOutputHandler
     app_services: 'AppServices' # Forward reference
     # Potentially add current_agent_slug, etc.
@@ -54,14 +56,14 @@ class CommandContext:
 @dataclass
 class AppServices:
     """Container for shared application services."""
-    raw_app_config: Dict[str, Any]
-    output_handler: AbstractOutputHandler
-    prompt_func: PromptFunc
+    raw_app_config: Dict[str, Any] # Should ideally be AppConfig type from config_loader
+    output_handler: AbstractOutputHandler # This might become part of AgUIClient interaction
+    prompt_func: PromptFunc # This might become part of AgUIClient interaction
     global_tool_registry: 'ToolRegistry'
-    event_bus: 'AsyncEventBus' # Added
+    event_bus: ZeroMQEventBus # Changed from string literal to direct type
     current_log_level: str = "INFO"
 
-    get_current_agent_slug: Optional[Callable[[], str]] = None
+    get_current_agent_slug: Optional[Callable[[], Optional[str]]] = None # Return Optional[str]
     get_available_agents: Optional[Callable[[], List[str]]] = None
     # get_all_command_definitions removed as agents don't register commands with app_core anymore
     request_agent_switch: Optional[Callable[[str], Coroutine[Any, Any, bool]]] = None

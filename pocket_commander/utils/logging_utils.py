@@ -21,13 +21,13 @@ def setup_logging(raw_app_config: Dict[str, Any]) -> str:
     Returns:
         The initial global log level string (e.g., "INFO").
     """
-    logging_settings = raw_app_config.get("logging", {})
+    logging_settings = raw_app_config.logging if raw_app_config.logging is not None else {}
 
     # 1. Read logging settings or use defaults
-    level_str = logging_settings.get("level", DEFAULT_LOG_LEVEL_STR).upper()
-    file_path = logging_settings.get("file_path", DEFAULT_LOG_FILE)
-    file_mode = logging_settings.get("file_mode", DEFAULT_LOG_FILE_MODE)
-    log_format_str = logging_settings.get("format", DEFAULT_LOG_FORMAT)
+    level_str = (logging_settings.level if logging_settings.level is not None else DEFAULT_LOG_LEVEL_STR).upper()
+    file_path = getattr(logging_settings, 'file_path', None) or DEFAULT_LOG_FILE
+    file_mode = getattr(logging_settings, 'file_mode', None) or DEFAULT_LOG_FILE_MODE
+    log_format_str = getattr(logging_settings, 'format', None) or DEFAULT_LOG_FORMAT
 
     # 2. Validate log level string and get numeric level
     numeric_level = getattr(logging, level_str, None)

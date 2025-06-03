@@ -1,8 +1,10 @@
-from typing import Literal, Optional
+from typing import Literal, Optional, Any
 import uuid
+# import time # No longer needed here, inherited via InternalBaseEvent
 from pydantic import Field
 
-from pocket_commander.event_bus import BaseEvent
+# Import InternalBaseEvent from its new location
+from pocket_commander.ag_ui.types import InternalBaseEvent, ConfiguredBaseModel # ConfiguredBaseModel might not be needed if InternalBaseEvent handles it
 
 # Re-export all events from ag_ui.events for convenience.
 # This makes pocket_commander.events the central place to import events from,
@@ -31,18 +33,19 @@ from pocket_commander.ag_ui.events import (
 
 
 # --- Internal Application-Specific Events ---
+# InternalBaseEvent is now defined in pocket_commander.ag_ui.types
 
-class AppInputEvent(BaseEvent):
+class AppInputEvent(InternalBaseEvent):
     """
     Event published by a UI client when the user submits input
     intended for the application or an agent.
     """
+    TOPIC: str = "app.ui.input" # AI! ADD CLASS ATTRIBUTE FOR TOPIC
     input_text: str
     source_ui_client_id: Optional[str] = None # e.g., "terminal", "web_ui_session_xyz"
-    event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
 
-class AgentLifecycleEvent(BaseEvent):
+class AgentLifecycleEvent(InternalBaseEvent):
     """
     Event published by app_core when an agent's lifecycle state changes.
     This is an internal event for application logic, distinct from ag_ui run/step events.
@@ -51,27 +54,28 @@ class AgentLifecycleEvent(BaseEvent):
     lifecycle_type: Literal["activating", "activated", "deactivating", "deactivated"]
 
 
-class InternalExecuteToolRequest(BaseEvent):
+class InternalExecuteToolRequest(InternalBaseEvent):
     """
     Internal event to request the execution of a specific tool.
     """
     tool_call_id: str
     tool_name: str
     arguments_json: str
-    parent_message_id: Optional[str] = None # Made Optional to align with ag_ui.ToolCallStartEvent
+    parent_message_id: Optional[str] = None
 
 
-class RequestPromptEvent(BaseEvent):
+class RequestPromptEvent(InternalBaseEvent):
     """
     Event published to request dedicated input from the user via a UI client.
     """
     prompt_message: str
     is_sensitive: bool = False  # e.g., for password input
     response_event_type: str # Expected event type for the response
+    # Using str for correlation_id as it's for matching, not necessarily a UUID object
     correlation_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
 
-class PromptResponseEvent(BaseEvent):
+class PromptResponseEvent(InternalBaseEvent):
     """
     Event published by a UI client in response to a RequestPromptEvent.
     """
@@ -82,11 +86,11 @@ class PromptResponseEvent(BaseEvent):
 
 # Ensure all relevant events are easily accessible via pocket_commander.events
 __all__ = [
-    # pocket_commander.event_bus
-    "BaseEvent",
+    # pocket_commander.ag_ui.types
+    "InternalBaseEvent",
     # pocket_commander.ag_ui.events
     "EventType",
-    "AgUiBaseEvent",
+    "AgUiBaseEvent", # This is pocket_commander.ag_ui.events.BaseEvent
     "CustomEvent",
     "AgUiEventUnion",
     "MessagesSnapshotEvent",
@@ -104,10 +108,10 @@ __all__ = [
     "ToolCallArgsEvent",
     "ToolCallEndEvent",
     "ToolCallStartEvent",
-    # Internal events
+    # Internal events (now inheriting from InternalBaseEvent via ag_ui.types)
     "AppInputEvent",
     "InternalExecuteToolRequest",
     "AgentLifecycleEvent",
-    "RequestPromptEvent", # Added
-    "PromptResponseEvent", # Added
+    "RequestPromptEvent",
+    "PromptResponseEvent",
 ]

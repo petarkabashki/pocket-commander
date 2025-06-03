@@ -5,6 +5,8 @@ This module contains the types for the Agent User Interaction Protocol Python SD
 from typing import Any, List, Literal, Optional, Union, Annotated
 from pydantic import BaseModel, Field, ConfigDict
 from pydantic.alias_generators import to_camel
+import uuid # Added
+import time # Added
 
 class ConfiguredBaseModel(BaseModel):
     """
@@ -14,8 +16,21 @@ class ConfiguredBaseModel(BaseModel):
         extra="forbid",
         alias_generator=to_camel,
         populate_by_name=True,
-        ser_json_by_alias=True
+        ser_json_by_alias=True # Corrected from ser_json_by_alias to use_enum_values if needed for enums, but True is fine for general alias use
     )
+
+
+# --- Base Event for Internal Application Events ---
+# Moved here to break circular dependency
+class InternalBaseEvent(ConfiguredBaseModel):
+    """
+    Base class for internal application events, not directly part of the AG UI protocol.
+    Provides common fields like event_id and timestamp.
+    Located in ag_ui.types to be a common dependency without circularity.
+    """
+    event_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    timestamp: float = Field(default_factory=time.time)
+    topic: Optional[str] = None
 
 
 class FunctionCall(ConfiguredBaseModel):
@@ -77,7 +92,7 @@ class UserMessage(BaseMessage):
     content: str
 
 
-class ToolMessage(ConfiguredBaseModel):
+class ToolMessage(ConfiguredBaseModel): # Does not inherit BaseMessage
     """
     A tool result message.
     """

@@ -12,7 +12,8 @@ dependencies = [
     "mcp[cli] (>=1.9.2,<2.0.0)",
     "markdownify (>=1.1.0,<2.0.0)",
     "protego (>=0.4.0,<0.5.0)",
-    "readabilipy (>=0.3.0,<0.4.0)"
+    "readabilipy (>=0.3.0,<0.4.0)",
+    "pyzmq (>=26.4.0,<27.0.0)"
 ]
 
 [tool.poetry]

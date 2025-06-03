@@ -6,13 +6,35 @@ from typing import Dict, Any, Optional, List
 
 from pocket_commander.pocketflow.base import AsyncNode
 from pocket_commander.types import AppServices, AgentConfig
-from pocket_commander.event_bus import AsyncEventBus
+from pocket_commander.event_bus import ZeroMQEventBus
 from pocket_commander.events import AgentLifecycleEvent # Internal lifecycle event
 from pocket_commander.ag_ui import events as ag_ui_events
 from pocket_commander.ag_ui import types as ag_ui_types
 
+logging.basicConfig(
+    level=logging.DEBUG,           # set root level to DEBUG
+    format="%(asctime)s %(name)s %(levelname)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
 logger = logging.getLogger(__name__)
 
+def _get_ag_ui_topic(event_type: ag_ui_events.EventType) -> str:
+    """
+    Converts an ag_ui EventType enum to a hierarchical topic string.
+    e.g., TEXT_MESSAGE_START -> ag_ui.text_message.start
+    e.g., TOOL_CALL_ARGS   -> ag_ui.tool_call.args
+    e.g., RUN_FINISHED     -> ag_ui.run.finished
+    """
+    value_lower = event_type.value.lower()
+    last_underscore_idx = value_lower.rfind('_')
+    if last_underscore_idx != -1:
+        name_part = value_lower[:last_underscore_idx]
+        action_part = value_lower[last_underscore_idx+1:]
+        return f"ag_ui.{name_part}.{action_part}"
+    else:
+        # For event types like RAW, CUSTOM that might not have an underscore
+        return f"ag_ui.{value_lower}"
 class MainDefaultAgent(AsyncNode):
     """
     The main default agent for Pocket Commander.
@@ -23,7 +45,7 @@ class MainDefaultAgent(AsyncNode):
     def __init__(self, app_services: AppServices, **init_args: Any):
         super().__init__()
         self.app_services = app_services
-        self.event_bus: AsyncEventBus = app_services.event_bus
+        self.event_bus: ZeroMQEventBus = app_services.event_bus # type: ignore
         self.init_args = init_args
         self.slug = init_args.get("slug", "main")
         self.default_greet_name = init_args.get("default_greet_name", "User")
@@ -35,7 +57,7 @@ class MainDefaultAgent(AsyncNode):
 
         if self.event_bus:
             # Subscribe to internal AgentLifecycleEvent for activation/deactivation
-            asyncio.create_task(self.event_bus.subscribe(AgentLifecycleEvent, self.handle_internal_lifecycle_event)) # type: ignore
+            asyncio.create_task(self.event_bus.subscribe("AgentLifecycleEvent", self._handle_internal_lifecycle_event_adapter))
             logger.info(f"MainDefaultAgent '{self.slug}': Subscribed to internal AgentLifecycleEvent.")
             # We will subscribe to ag_ui_events.MessagesSnapshotEvent when a run starts
         else:
@@ -58,12 +80,21 @@ class MainDefaultAgent(AsyncNode):
 
         self._message_history.append(new_message)
 
-        await self.event_bus.publish(ag_ui_events.TextMessageStartEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_START, message_id=message_id, role=role))
+        start_event = ag_ui_events.TextMessageStartEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_START, message_id=message_id, role=role)
+        await self.event_bus.publish(_get_ag_ui_topic(start_event.type), start_event.model_dump(mode="json"))
         if content: # Only send content event if there is content
-            await self.event_bus.publish(ag_ui_events.TextMessageContentEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_CONTENT, message_id=message_id, delta=content))
-        await self.event_bus.publish(ag_ui_events.TextMessageEndEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_END, message_id=message_id))
-        logger.debug(f"Published '{role}' message (ID: {message_id}): {content[:50]}...")
-        return message_id
+            content_event = ag_ui_events.TextMessageContentEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_CONTENT, message_id=message_id, delta=content)
+            await self.event_bus.publish(_get_ag_ui_topic(content_event.type), content_event.model_dump(mode="json"))
+        end_event = ag_ui_events.TextMessageEndEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_END, message_id=message_id)
+        await self.event_bus.publish(_get_ag_ui_topic(end_event.type), end_event.model_dump(mode="json"))
+
+    async def _handle_internal_lifecycle_event_adapter(self, topic: str, data: dict):
+        logger.debug(f"MainDefaultAgent '{self.slug}' received raw lifecycle event on topic '{topic}': {data}")
+        try:
+            event = AgentLifecycleEvent.model_validate(data)
+            await self.handle_internal_lifecycle_event(event)
+        except Exception as e:
+            logger.error(f"Error processing AgentLifecycleEvent from topic '{topic}': {e}", exc_info=True)
 
     async def handle_internal_lifecycle_event(self, event: AgentLifecycleEvent):
         logger.debug(f"MainDefaultAgent '{self.slug}' received internal AgentLifecycleEvent: {event.lifecycle_type} for agent '{event.agent_name}'")
@@ -85,14 +116,22 @@ class MainDefaultAgent(AsyncNode):
     async def on_agent_deactivate(self):
         self._is_active = False
         if self._current_run_id: # If a run was active, mark it as finished
-            await self.event_bus.publish(ag_ui_events.RunFinishedEvent(type=ag_ui_events.EventType.RUN_FINISHED, thread_id=self.slug, run_id=self._current_run_id)) # Using slug as thread_id for now
+            finished_event = ag_ui_events.RunFinishedEvent(type=ag_ui_events.EventType.RUN_FINISHED, thread_id=self.slug, run_id=self._current_run_id) # Using slug as thread_id for now
+            await self.event_bus.publish(_get_ag_ui_topic(ag_ui_events.EventType.STEP_FINISHED), finished_event.model_dump(mode="json"))
             self._current_run_id = None
         
         # Unsubscribe from message events
-        await self.event_bus.unsubscribe(ag_ui_events.MessagesSnapshotEvent, self.handle_message_snapshot) # type: ignore
+        await self.event_bus.unsubscribe(_get_ag_ui_topic(ag_ui_events.EventType.MESSAGES_SNAPSHOT), self._handle_message_snapshot_adapter)
         # Could also unsubscribe from TextMessageEndEvent if we were listening for user messages that way
         logger.info(f"MainDefaultAgent '{self.slug}' deactivated and unsubscribed from message events.")
 
+    async def _handle_run_started_adapter(self, topic: str, data: dict):
+        logger.debug(f"MainDefaultAgent '{self.slug}' received raw run started event on topic '{topic}': {data}")
+        try:
+            event = ag_ui_events.RunStartedEvent.model_validate(data)
+            await self.handle_run_started(event)
+        except Exception as e:
+            logger.error(f"Error processing RunStartedEvent from topic '{topic}': {e}", exc_info=True)
 
     async def handle_run_started(self, event: ag_ui_events.RunStartedEvent):
         """Handles the start of a new run, typically initiated by user input."""
@@ -103,7 +142,15 @@ class MainDefaultAgent(AsyncNode):
         self._message_history = [] # Clear history for the new run
         logger.info(f"MainDefaultAgent '{self.slug}' received RunStartedEvent (ID: {event.run_id}). Subscribing to MessagesSnapshotEvent.")
         # Subscribe to MessagesSnapshotEvent to get the initial context for this run
-        await self.event_bus.subscribe(ag_ui_events.MessagesSnapshotEvent, self.handle_message_snapshot) # type: ignore
+        await self.event_bus.subscribe(_get_ag_ui_topic(ag_ui_events.EventType.MESSAGES_SNAPSHOT), self._handle_message_snapshot_adapter)
+
+    async def _handle_message_snapshot_adapter(self, topic: str, data: dict):
+        logger.debug(f"MainDefaultAgent '{self.slug}' received raw message snapshot on topic '{topic}': {data}")
+        try:
+            event = ag_ui_events.MessagesSnapshotEvent.model_validate(data)
+            await self.handle_message_snapshot(event)
+        except Exception as e:
+            logger.error(f"Error processing MessagesSnapshotEvent from topic '{topic}': {e}", exc_info=True)
 
     async def handle_message_snapshot(self, event: ag_ui_events.MessagesSnapshotEvent):
         """Processes a snapshot of messages, typically the user's input."""
@@ -147,10 +194,11 @@ class MainDefaultAgent(AsyncNode):
         # Once processed, this agent considers its part of the run finished for this input.
         # More complex agents might have multiple steps.
         if self._current_run_id:
-            await self.event_bus.publish(ag_ui_events.RunFinishedEvent(type=ag_ui_events.EventType.RUN_FINISHED, thread_id=self.slug, run_id=self._current_run_id))
+            finished_event = ag_ui_events.RunFinishedEvent(type=ag_ui_events.EventType.RUN_FINISHED, thread_id=self.slug, run_id=self._current_run_id)
+            await self.event_bus.publish(_get_ag_ui_topic(ag_ui_events.EventType.STEP_FINISHED), finished_event.model_dump(mode="json"))
             self._current_run_id = None # Reset for the next run
             # Unsubscribe from MessagesSnapshotEvent until the next RunStartedEvent
-            await self.event_bus.unsubscribe(ag_ui_events.MessagesSnapshotEvent, self.handle_message_snapshot) # type: ignore
+            await self.event_bus.unsubscribe(_get_ag_ui_topic(ag_ui_events.EventType.MESSAGES_SNAPSHOT), self._handle_message_snapshot_adapter)
             logger.info(f"MainDefaultAgent '{self.slug}' finished processing run {self._current_run_id} and unsubscribed from MessagesSnapshotEvent.")
 
 
@@ -205,21 +253,29 @@ Global commands (start with /) are handled by the application core."""
         self._message_history.append(assistant_message_with_tool_call)
 
         # 2. Publish events for the AssistantMessage (text part)
-        await self.event_bus.publish(ag_ui_events.TextMessageStartEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_START, message_id=assistant_message_id, role="assistant"))
+        text_start_event = ag_ui_events.TextMessageStartEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_START, message_id=assistant_message_id, role="assistant")
+        await self.event_bus.publish(_get_ag_ui_topic(text_start_event.type), text_start_event.model_dump(mode="json"))
         if assistant_message_with_tool_call.content:
-             await self.event_bus.publish(ag_ui_events.TextMessageContentEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_CONTENT, message_id=assistant_message_id, delta=assistant_message_with_tool_call.content))
-        await self.event_bus.publish(ag_ui_events.TextMessageEndEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_END, message_id=assistant_message_id))
+            text_content_event = ag_ui_events.TextMessageContentEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_CONTENT, message_id=assistant_message_id, delta=assistant_message_with_tool_call.content)
+            await self.event_bus.publish(_get_ag_ui_topic(text_content_event.type), text_content_event.model_dump(mode="json"))
+        text_end_event = ag_ui_events.TextMessageEndEvent(type=ag_ui_events.EventType.TEXT_MESSAGE_END, message_id=assistant_message_id)
+        await self.event_bus.publish(_get_ag_ui_topic(text_end_event.type), text_end_event.model_dump(mode="json"))
         
         # 3. Publish events for the ToolCall itself
-        await self.event_bus.publish(ag_ui_events.ToolCallStartEvent(
-            type=ag_ui_events.EventType.TOOL_CALL_START, # AI! Add type
+        tool_call_start_event = ag_ui_events.ToolCallStartEvent(
+            type=ag_ui_events.EventType.TOOL_CALL_START,
             tool_call_id=tool_call.id,
             tool_name=tool_call.function.name, # type: ignore
             parent_message_id=assistant_message_id
-        ))
+        )
+        await self.event_bus.publish(_get_ag_ui_topic(tool_call_start_event.type), tool_call_start_event.model_dump(mode="json"))
+        
         # Stream arguments (even if empty JSON string for this tool)
-        await self.event_bus.publish(ag_ui_events.ToolCallArgsEvent(type=ag_ui_events.EventType.TOOL_CALL_ARGS, tool_call_id=tool_call.id, delta=tool_call.function.arguments)) # type: ignore # AI! Add type
-        await self.event_bus.publish(ag_ui_events.ToolCallEndEvent(type=ag_ui_events.EventType.TOOL_CALL_END, tool_call_id=tool_call.id)) # AI! Add type
+        tool_call_args_event = ag_ui_events.ToolCallArgsEvent(type=ag_ui_events.EventType.TOOL_CALL_ARGS, tool_call_id=tool_call.id, delta=tool_call.function.arguments) # type: ignore
+        await self.event_bus.publish(_get_ag_ui_topic(tool_call_args_event.type), tool_call_args_event.model_dump(mode="json"))
+        
+        tool_call_end_event = ag_ui_events.ToolCallEndEvent(type=ag_ui_events.EventType.TOOL_CALL_END, tool_call_id=tool_call.id)
+        await self.event_bus.publish(_get_ag_ui_topic(tool_call_end_event.type), tool_call_end_event.model_dump(mode="json"))
         
         logger.info(f"MainAgent initiated tool call for '{tool_name}' (ID: {tool_call_id}), part of AssistantMessage (ID: {assistant_message_id}).")
         # The actual execution is now expected to be handled by ToolAgent via InternalExecuteToolRequest
@@ -232,7 +288,7 @@ Global commands (start with /) are handled by the application core."""
         Actual message processing subscriptions happen on RunStartedEvent.
         """
         # Subscribing to RunStartedEvent to know when to expect messages for a new interaction
-        await self.event_bus.subscribe(ag_ui_events.RunStartedEvent, self.handle_run_started) # type: ignore
+        await self.event_bus.subscribe(_get_ag_ui_topic(ag_ui_events.EventType.RUN_STARTED), self._handle_run_started_adapter)
         logger.info(f"MainDefaultAgent '{self.slug}' activate() called. Subscribed to RunStartedEvent.")
         # The internal AgentLifecycleEvent subscription is already done in __init__
 

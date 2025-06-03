@@ -3,7 +3,7 @@ from typing import Any, Optional
 import uuid # For generating message IDs
 
 from pocket_commander.types import AppServices
-from pocket_commander.event_bus import AsyncEventBus
+from pocket_commander.event_bus import ZeroMQEventBus
 from pocket_commander.ag_ui import events as ag_ui_events
 # from pocket_commander.ag_ui.types import Message # Not directly used now
 from pocket_commander.events import AppInputEvent # Ensure this is the newly defined one
@@ -11,8 +11,12 @@ from pocket_commander.events import AppInputEvent # Ensure this is the newly def
 class AbstractAgUIClient(ABC):
     def __init__(self, app_services: AppServices, client_id: str = "default_ui_client"):
         self.app_services: AppServices = app_services
-        self.event_bus: AsyncEventBus = app_services.event_bus
+        self._event_bus: ZeroMQEventBus = app_services.event_bus
         self.client_id: str = client_id
+
+    @property
+    def event_bus(self) -> ZeroMQEventBus:
+        return self._event_bus
 
     @abstractmethod
     async def initialize(self) -> None:

@@ -103,3 +103,10 @@ mcp_tools:
   #       type: "string"
   #       required: false
   #       default: "hello"
+
+zeromq_event_bus:
+  broker_publisher_frontend_address: "tcp://localhost:5559" # Address for publishers to connect to broker's XSUB
+  broker_subscriber_frontend_address: "tcp://localhost:5560" # Address for subscribers to connect to broker's XPUB
+  # Potentially add an address for the broker to bind its XSUB and XPUB sockets if different from connect addresses
+  # e.g., broker_xsub_bind_address: "tcp://*:5559"
+  # broker_xpub_bind_address: "tcp://*:5560"

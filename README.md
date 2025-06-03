@@ -1,38 +1,40 @@
 # Pocket Commander
 
-Pocket Commander is an extendable agentic AI workflow engine, built upon the **PocketFlow framework**. It serves as a robust foundation for developing and deploying custom agentic automation tools. Instead of being just a personal assistant, it provides the core infrastructure to create sophisticated AI agents capable of performing complex tasks by understanding natural language queries and leveraging a flexible tool-based architecture.
+Pocket Commander is an **extendable agentic AI workflow engine**, built upon the **PocketFlow framework**. Its primary purpose is to provide a solid and flexible foundation for developers to **create and deploy custom agentic automation tools**. It moves beyond the concept of a simple personal assistant to become a platform for building sophisticated AI agents.
 
 ## Core Concepts
 
-*   **Agentic AI Workflow Engine:** Pocket Commander orchestrates sequences of operations (workflows) carried out by AI agents.
-*   **PocketFlow Framework:** Leverages the lightweight and powerful PocketFlow framework for defining and managing these workflows.
-*   **Extensible Tooling:** Easily integrate custom tools to expand the capabilities of your AI agents.
-*   **Foundation for Custom Automation:** Designed to be a starting point for building specialized agentic solutions tailored to specific needs.
+*   **Agentic AI Workflow Engine:** Pocket Commander orchestrates complex, multi-step tasks performed by AI agents.
+*   **PocketFlow Framework:** Leverages the PocketFlow framework to define, manage, and execute these workflows using a system of interconnected "Nodes" (processing units) and "Flows" (sequences of Nodes).
+*   **Extensible Tooling:** Features a flexible tool-based architecture, allowing easy integration of new capabilities (e.g., data fetching, API interaction, custom logic).
+*   **Foundation for Custom Automation:** Designed as a starting point for building specialized AI-powered automation solutions without needing to build core agentic infrastructure from scratch.
 
 ## Features
 
-*   **Natural Language Understanding:** Interprets user queries to trigger and guide agentic workflows.
-*   **Modular Tool-Based Architecture:** Extensible functionality through a system of easily integrated tools.
-*   **Asynchronous Operations:** Built with `asyncio` for efficient, non-blocking task execution, crucial for responsive AI agents.
-*   **Interactive Terminal Interface:** Provides a user-friendly command-line experience using `prompt-toolkit` and `rich` for development, testing, and interaction.
-*   **Configurable Agents:** Supports different operational agents, allowing for various agent configurations and behaviors.
-*   **Workflow Management:** Utilizes PocketFlow to define, manage, and execute complex sequences of actions.
+*   **Natural Language Understanding:** Interprets user queries to initiate and guide agentic workflows.
+*   **PocketFlow Integration:** Deeply utilizes the PocketFlow framework for defining, managing, and executing workflows.
+*   **Modular Tool-Based Architecture:** Allows for easy integration and extension of agent capabilities through custom tools.
+*   **Asynchronous Operations:** Built with `asyncio` for efficient, non-blocking task execution, enabling responsive AI agents.
+*   **Interactive Terminal Interface:** Provides a user-friendly command-line experience for development, testing, and direct interaction with agents and their workflows.
+*   **Configurable Agents & Workflows:** Supports configuration via YAML files, allowing users to define agents, toolsets, and agent behaviors.
+*   **Clear and Modular Architecture:** Designed to be easy to understand and extend, facilitating the creation of custom agentic tools.
 
 ## Technologies Used
 
 *   Python
 *   PocketFlow
 *   `asyncio`
-*   `aiohttp`
+*   `aiohttp` (if still used, to be verified)
 *   `prompt-toolkit`
 *   `rich`
 *   `PyYAML`
+*   ZeroMQ (for event bus, based on file names like `zeromq_event_bus.py`)
 
 ## Getting Started
 
 ### Prerequisites
 
-*   Python 3.8+
+*   Python 3.8+ (Verify specific version if possible, e.g., py312 from custom instructions)
 *   Poetry (for dependency management)
 
 ### Installation
@@ -46,6 +48,7 @@ Pocket Commander is an extendable agentic AI workflow engine, built upon the **P
     ```bash
     poetry install
     ```
+    (As per custom instructions, consider `conda activate py312` if applicable before poetry commands)
 
 ### Running the Application
 
@@ -53,20 +56,26 @@ To start the interactive terminal:
 ```bash
 poetry run python -m pocket_commander.main
 ```
+(As per custom instructions, consider `conda activate py312` first: `conda activate py312 && poetry run python -m pocket_commander.main`)
 
 ## Project Structure
 
 The project follows a modular structure, aligned with PocketFlow principles:
 
-*   `pocket_commander/nodes/`: Contains individual processing units (Nodes), the building blocks of PocketFlows.
-*   `pocket_commander/flows/`: Defines PocketFlows, which are sequences or graphs of interconnected Nodes orchestrating agent behavior.
-*   `pocket_commander/tools/`: Houses specific tools callable by agents within the workflows (e.g., `get_stock_price`).
-*   `pocket_commander/agents/`: Implements different operational agents for the terminal interface, each potentially running a distinct master Flow.
-*   `pocket_commander/utils/`: Contains shared utility modules and helper functions.
+*   `pocket_commander/nodes/`: Contains individual processing units (Nodes), the building blocks of PocketFlows (e.g., `initial_query_node.py`, `tool_enabled_llm_node.py`).
+*   `pocket_commander/flows/`: Defines PocketFlows, which are sequences or graphs of interconnected Nodes orchestrating agent behavior (e.g., `tool_flow.py`).
+*   `pocket_commander/tools/`: Houses specific tools callable by agents within the workflows (e.g., `fetch_tool.py`, `greet_tool.py`).
+*   `pocket_commander/agents/`: Implements different operational agents and their logic (e.g., `composer/composer_flow.py`, `main/main_agent_logic.py`).
+*   `pocket_commander/core_agents/`: Contains core agent implementations (e.g., `main_agent.py`, `composer_agent.py`).
+*   `pocket_commander/utils/`: Contains shared utility modules and helper functions (e.g., `call_llm.py`, `logging_utils.py`).
+*   `pocket_commander/ag_ui/`: Contains components for the agent user interface, including the terminal client (e.g., `terminal_client.py`).
+*   `pocket_commander/commands/`: Manages command definitions, parsing, and I/O for the terminal interface.
+*   `pocket_commander/pocketflow/`: Core PocketFlow framework components (e.g., `async_flow_manager.py`, `base.py`).
+*   `pocket_commander/event_bus.py`, `pocket_commander/zeromq_event_bus.py`: Implementation of the event bus system.
 *   `pocket_commander/main.py`: Entry point for the application.
-*   `pocket_commander/terminal_interface.py`: Core logic for the interactive terminal.
-*   `pocket_commander.conf.yaml`: Configuration file for the application, including terminal agents and other settings.
+*   `pocket_commander.conf.yaml`: Configuration file for the application.
 *   `cline_docs/`: Contains documentation for Cline, the AI assistant working on this project, detailing its understanding of Pocket Commander.
+*   `docs/`: Contains design documents, plans, and guides related to the project.
 
 ## Contributing
 

@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Type, TypeVar, List
 from rich.console import Console # Keep for potential direct use, though TerminalAgUIClient has its own
 
 from pocket_commander.commands.io import AbstractCommandInput # AbstractOutputHandler removed
-from pocket_commander.event_bus import AsyncEventBus, BaseEvent 
+from pocket_commander.event_bus import ZeroMQEventBus # Removed BaseEvent as it's unused
 # SystemMessageEvent and AgentOutputEvent are less relevant for direct terminal output now
 # from pocket_commander.events import SystemMessageEvent, SystemMessageType 
 # from pocket_commander.events import AgentOutputEvent 
